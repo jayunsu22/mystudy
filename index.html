@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>반복학습</title>
-<link rel="stylesheet" href="style.css?v=20260823c">
+<link rel="stylesheet" href="style.css?v=20260823d">
 </head>
 <body>
 <div id="app">
@@ -12,25 +12,18 @@
     <div class="top-row">
       <h1>🔁 반복학습</h1>
       <div class="top-actions">
+        <button id="btnChapterReview" title="이 챕터 복습" style="display:none;">🔁</button>
         <button id="btnRefresh" title="새로고침">🔄</button>
         <button id="btnHome" title="홈으로">🏠</button>
       </div>
     </div>
-    <p id="topSubtitle">출근길엔 신규학습, 퇴근길엔 복습 — 모드를 선택하세요.</p>
+    <p id="topSubtitle">챕터를 선택해서 공부를 시작하세요.</p>
   </div>
 
   <div class="card" id="card">
     <div id="view-home">
-      <div class="stat-row" id="statRow"></div>
-      <div class="modepick">
-        <div style="text-align:center;">
-          <button id="startNewBtn" class="bigbtn">🌱<br>신규학습</button>
-        </div>
-        <div style="text-align:center;">
-          <button id="startReviewBtn" class="bigbtn">🔁<br>복습</button>
-        </div>
-      </div>
-      <p class="small-note" style="margin-top:18px;">운전 중에는 정차 시 시작해 주세요. 이후 진행은 음성으로 이어집니다.</p>
+      <div class="chapter-list" id="chapterListWrap"></div>
+      <p class="small-note" style="margin-top:18px;">운전 중에는 정차 시 시작해 주세요. 챕터를 고르면 이후 진행은 음성으로 이어집니다.</p>
       <div id="debugPanel" style="margin-top:16px; text-align:left; max-height:120px; overflow-y:auto; font-family:monospace; font-size:11px; color:var(--muted); background:#0d1526; padding:10px; border-radius:8px; white-space:pre-wrap; width:100%;"></div>
     </div>
   </div>
@@ -49,6 +42,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="srs-utils.js?v=20260823"></script>
-<script src="app.js?v=20260823g"></script>
+<script src="app.js?v=20260824a"></script>
 </body>
 </html>

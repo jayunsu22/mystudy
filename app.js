@@ -9,12 +9,18 @@ const CONFIG = {
   GRADUATE_PATH: '/repeat-study-graduate',
   REVIEW_COMPLETE_PATH: '/repeat-study-review-complete', // 채점 없이 SM-2 스케줄만 넘기는 웹훅
   MATERIALS_GET_PATH: '/repeat-study-materials-get',
+  CHAPTERS_GET_PATH: '/repeat-study-chapters-get', // 챕터(학습자료) 목록 조회
+  CHAPTER_CARDS_GET_PATH: '/repeat-study-chapter-cards-get', // ?material_id= 로 특정 챕터의 문장 목록 조회
   MAX_NEW_PER_SESSION: 8,
   ANSWER_TIMEOUT_MS: 8000,
-  DRILL_WAIT_MS: 10000 // 3번 듣고 따라하기 + 2번 회상하기, 각 스텝마다 조용히 기다리는 시간(마이크 안 켬)
+  DRILL_WAIT_MS: 10000, // 3번 듣고 따라하기 + 2번 회상하기, 각 스텝마다 조용히 기다리는 시간(마이크 안 켬)
+  CHAPTER_REVIEW_WAIT_MS: 10000 // 챕터 셔플 복습에서 질문 듣고 조용히 대답해보는 대기 시간(마이크 안 켬)
 };
 // Gemini 채점(GRADE_PATH)은 지금 드릴에서 호출을 잠시 막아뒀습니다 — 운전 중 소음 때문에 인식/채점이 잘 안 돼서.
 // 관련 코드(callWebhook(GRADE_PATH,...), buildGradePayload, teachAndPrompt/confirmAdvance)는 나중에 다시 쓸 수 있게 지우지 않고 남겨둠.
+// SM-2 자동학습(신규학습/복습 큐, newLearningFlow/runLearningLoop/reviewFlow/runReviewLoop)은
+// "챕터 선택 학습 + 셔플 복습"으로 완전히 대체되어 화면/버튼에서는 더 이상 쓰이지 않습니다.
+// 관련 웹훅(NEW_GET_PATH 등)과 함수는 나중에 다시 쓸 수 있게 지우지 않고 남겨둠.
 
 /* ============ fetch 공통 유틸 (나의취향/품질관리 프로젝트와 동일 패턴) ============ */
 function showToast(message, type) {
@@ -63,8 +69,12 @@ function renderDebugPanel() {
 }
 
 /* ============ 상태 ============ */
-let mode = 'HOME'; // HOME | NEW | REVIEW
+let mode = 'HOME'; // HOME | CHAPTER | CHAPTER_REVIEW | NEW(미사용) | REVIEW(미사용)
 let recognizing = false;
+let currentChapter = null; // { id, title } — 지금 들어가 있는 챕터
+let chapterCards = [];
+let chapterIndex = 0;
+let chapterJumpIndex = null; // 드롭다운으로 다른 문장을 골랐을 때 다음에 진행할 인덱스
 const RATE_OPTIONS = [0.7, 0.85, 1.0, 1.15];
 const ENGLISH_RATE_MULTIPLIER = 0.7; // 영어 문장(정답)은 발음이 잘 들리도록 한국어 안내보다 항상 70% 속도로 재생
 let speechRate = parseFloat(localStorage.getItem('repeatStudySpeechRate')) || 0.85;
@@ -97,6 +107,7 @@ if (SR) {
 const el = {
   card: document.getElementById('card'),
   home: document.getElementById('view-home'),
+  chapterListWrap: document.getElementById('chapterListWrap'),
   statRow: document.getElementById('statRow'),
   startNewBtn: document.getElementById('startNewBtn'),
   startReviewBtn: document.getElementById('startReviewBtn'),
@@ -108,6 +119,7 @@ const el = {
   btnPause: document.getElementById('btnPause'),
   btnRefresh: document.getElementById('btnRefresh'),
   btnHome: document.getElementById('btnHome'),
+  btnChapterReview: document.getElementById('btnChapterReview'),
   voiceHint: document.getElementById('voiceHint'),
 };
 
@@ -276,7 +288,7 @@ function countdownWait(ms) {
   let remain = ms;
   return new Promise((resolve) => {
     const tick = () => {
-      if (repeatRequested || nextRequested) { resolve(); return; }
+      if (mode === 'HOME' || repeatRequested || nextRequested) { resolve(); return; } // 종료(홈으로) 시 즉시 대기 중단
       if (isPaused) { waitTimer = setTimeout(tick, 250); return; }
       if (statusEl) statusEl.querySelector('.status-text').textContent = `말해보세요... (${Math.max(0, Math.ceil(remain / 1000))}초)`;
       remain -= 250;
@@ -306,6 +318,7 @@ async function runCardDrill(card) {
   const introSentence = introMatch ? introMatch[1] : (card.question || '');
   renderStatus('speaking');
   await speak(`이번 문장은 '${introSentence}' 입니다. 잘 듣고 따라해 주세요.`, 'ko-KR');
+  if (mode === 'HOME') return true; // 종료(홈으로) 시 즉시 중단
   if (repeatRequested) { repeatRequested = false; return false; }
   if (nextRequested) { return true; }
 
@@ -319,10 +332,12 @@ async function runCardDrill(card) {
   for (const step of steps) {
     renderStatus('speaking');
     await speak(step.text, step.lang);
+    if (mode === 'HOME') return true;
     if (repeatRequested) { repeatRequested = false; return false; }
     if (nextRequested) { return true; }
     renderStatus('idle');
     await countdownWait(CONFIG.DRILL_WAIT_MS);
+    if (mode === 'HOME') return true;
     if (repeatRequested) { repeatRequested = false; return false; }
     if (nextRequested) { return true; }
   }
@@ -334,8 +349,10 @@ async function runCardDrill(card) {
    "지금문장"은 REPEAT 정규식에 추가한 "지금"에 걸린다. */
 async function confirmAdvanceThreeWay() {
   await speak('다음 문장으로 넘어가도 될까요?', 'ko-KR');
+  if (mode === 'HOME') return 'STOP'; // 종료(홈으로) 시 즉시 중단
   renderStatus('listening');
   const { text, error } = await listenOnce('ko-KR', CONFIG.ANSWER_TIMEOUT_MS);
+  if (mode === 'HOME') return 'STOP';
   dlog(`다음 확인 응답: "${text}"` + (error ? ` (에러: ${error})` : ''));
   const cmd = matchCommand(text);
   if (cmd === 'STOP') return 'STOP';
@@ -353,8 +370,10 @@ function rateButtonsHtml() {
   ).join('')}</div>`;
 }
 
-/* ============ 홈 화면 ============ */
+/* ============ 홈 화면 (챕터 목록) ============ */
+// 옛 SM-2 홈 화면 카운트(신규/복습 대기 개수)는 더 이상 화면에서 안 쓰지만, 나중을 위해 남겨둠.
 async function loadHomeCounts() {
+  if (!el.statRow) return;
   el.statRow.innerHTML = `<div class="stat-chip">불러오는 중...</div>`;
   try {
     const [newData, reviewData] = await Promise.all([
@@ -366,6 +385,28 @@ async function loadHomeCounts() {
     el.statRow.innerHTML = `<div class="stat-chip">신규 대기 ${newCount}개</div><div class="stat-chip">복습 대기 ${reviewCount}개</div>`;
   } catch (e) {
     el.statRow.innerHTML = `<div class="stat-chip">서버 연결 안됨 — CONFIG.N8N_BASE 확인</div>`;
+  }
+}
+
+/* 챕터(학습자료) 목록을 홈 화면에 불러온다. 챕터를 탭하면 enterChapter()로 들어간다. */
+async function loadChapterList() {
+  if (!el.chapterListWrap) return;
+  el.chapterListWrap.innerHTML = `<div class="stat-chip">불러오는 중...</div>`;
+  try {
+    const data = await callWebhook(CONFIG.CHAPTERS_GET_PATH, { method: 'GET' });
+    const chapters = data.chapters || [];
+    if (!chapters.length) {
+      el.chapterListWrap.innerHTML = `<div class="stat-chip">아직 등록된 챕터가 없어요</div>`;
+      return;
+    }
+    el.chapterListWrap.innerHTML = chapters.map((ch) => `
+      <button class="chapter-item" data-chapter-id="${ch.id}" data-chapter-title="${(ch.title || '').replace(/"/g, '&quot;')}">
+        <span class="chapter-title">${ch.title}</span>
+        <span class="chapter-count">${ch.card_count}개 문장 ›</span>
+      </button>
+    `).join('');
+  } catch (e) {
+    el.chapterListWrap.innerHTML = `<div class="stat-chip">서버 연결 안됨 — CONFIG.N8N_BASE 확인</div>`;
   }
 }
 
@@ -381,16 +422,158 @@ function goHome() {
   pendingResumeListen = false;
   repeatRequested = false;
   nextRequested = false;
+  currentChapter = null;
+  chapterCards = [];
+  chapterIndex = 0;
+  chapterJumpIndex = null;
   if (synth.paused) synth.resume(); // 일시정지 상태로 홈에 돌아가면 TTS 엔진이 계속 멈춰있지 않도록
   setPauseBtnLabel('⏸', '일시정지');
   if (el.btnPause) el.btnPause.classList.remove('paused');
   el.footer.style.display = 'none';
   el.voiceHint.style.display = 'none';
+  if (el.btnChapterReview) el.btnChapterReview.style.display = 'none';
   el.card.innerHTML = '';
   el.card.appendChild(el.home);
   el.home.style.display = 'block';
   renderDebugPanel();
-  loadHomeCounts();
+  loadChapterList();
+}
+
+/* ============ 챕터 선택 학습 + 셔플 복습 ============ */
+/* 챕터에 들어가면 그 챕터의 문장 목록을 받아와서 첫 문장부터 순서대로 5단계 드릴 학습을 시작한다. */
+async function enterChapter(chapter) {
+  currentChapter = chapter;
+  mode = 'CHAPTER';
+  el.home.style.display = 'none';
+  el.footer.style.display = 'none';
+  el.card.innerHTML = `<div class="stat-chip">불러오는 중...</div>`;
+  let data;
+  try {
+    data = await callWebhook(`${CONFIG.CHAPTER_CARDS_GET_PATH}?material_id=${encodeURIComponent(chapter.id)}`, { method: 'GET' });
+  } catch (e) { goHome(); return; }
+
+  chapterCards = data.cards || [];
+  if (!chapterCards.length) {
+    await speak(`${chapter.title} 챕터에 문장이 없어요.`, 'ko-KR');
+    goHome();
+    return;
+  }
+  chapterIndex = 0;
+  chapterJumpIndex = null;
+  if (el.btnChapterReview) el.btnChapterReview.style.display = 'inline-flex';
+  el.footer.style.display = 'flex';
+  el.voiceHint.style.display = 'block';
+  await runChapterStudyLoop();
+}
+
+/* 드롭다운에서 문장을 직접 골랐을 때: 진행 중인 스텝을 "다음" 버튼과 같은 방식으로 끊고,
+   다음 확인 단계에서 index+1이 아니라 고른 인덱스로 점프하게 한다. */
+function jumpToChapterCard(newIndex) {
+  if (mode !== 'CHAPTER' || newIndex === chapterIndex) return;
+  chapterJumpIndex = newIndex;
+  triggerNext();
+}
+
+function renderChapterStudyView(card, index) {
+  const options = chapterCards.map((c, i) => {
+    const m = /'([^']+)'/.exec(c.question || '');
+    const label = m ? m[1] : (c.question || `문장 ${i + 1}`);
+    return `<option value="${i}"${i === index ? ' selected' : ''}>${i + 1}. ${label}</option>`;
+  }).join('');
+  el.card.innerHTML = `
+    <select id="chapterCardSelect" class="chapter-select">${options}</select>
+    ${rateButtonsHtml()}
+    <div class="phase-tag new">📖 ${currentChapter.title} · ${index + 1}/${chapterCards.length}</div>
+    <div id="statusLine" class="status-line"><span class="status-dot"></span><span class="status-text">대기 중</span></div>
+    <div class="question">${card.question}</div>
+    <div class="hint">${card.hint || ''}</div>
+    <div class="answer" id="answerText" style="display:none;"></div>
+    <div class="heard" id="heardText"></div>
+    <div class="feedback" id="feedbackText" style="display:none;"></div>
+    <div class="pron-tip" id="pronTip" style="display:none;"></div>
+  `;
+  const selectEl = document.getElementById('chapterCardSelect');
+  if (selectEl) {
+    selectEl.addEventListener('change', () => { jumpToChapterCard(parseInt(selectEl.value, 10)); });
+  }
+}
+
+async function runChapterStudyLoop() {
+  while (chapterIndex < chapterCards.length) {
+    const card = chapterCards[chapterIndex];
+    let repeatThisCard = true;
+    while (repeatThisCard) {
+      repeatThisCard = false;
+      renderChapterStudyView(card, chapterIndex);
+      dlog(`챕터 학습 (${currentChapter.title} ${chapterIndex + 1}/${chapterCards.length}): ${card.question}`);
+
+      const completed = await runCardDrill(card);
+      if (mode === 'HOME') return;
+      if (!completed) { repeatThisCard = true; continue; } // "반복" 버튼 — 이 문장 처음부터 다시
+
+      const advance = await confirmAdvanceThreeWay();
+      if (mode === 'HOME') return;
+      if (advance === 'STOP') { await speak('학습을 종료할게요.', 'ko-KR'); goHome(); return; }
+      if (advance === 'REPEAT') { repeatThisCard = true; continue; }
+    }
+    if (chapterJumpIndex !== null) { chapterIndex = chapterJumpIndex; chapterJumpIndex = null; }
+    else { chapterIndex++; }
+  }
+  await speak(`${currentChapter.title} 챕터를 다 마쳤어요. 수고하셨어요!`, 'ko-KR');
+  goHome();
+}
+
+/* 셔플 복습: 챕터 문장을 무작위로 섞어서, 문장마다
+   "AI가 한국어로 질문 1번 말하기 → 10초 조용히 대기(그 사이에 소리내어 답해보기, 화면엔 정답 계속 표시)"를
+   2회 반복한다. 마이크는 켜지 않는다(운전 중 소음 대비). */
+function renderChapterReviewView(card, repIndex) {
+  el.card.innerHTML = `
+    <div class="phase-tag review">🔁 ${currentChapter.title} 복습 · ${repIndex + 1}/2</div>
+    <div id="statusLine" class="status-line"><span class="status-dot"></span><span class="status-text">대기 중</span></div>
+    <div class="question">${card.question}</div>
+    <div class="answer" id="answerText" style="display:block;">${card.model_answer}</div>
+    <div class="heard" id="heardText"></div>
+  `;
+}
+
+/* true를 반환하면 "종료"로 전체 복습을 중단해야 한다는 뜻. */
+async function runChapterReviewDrill(card) {
+  const introMatch = /'([^']+)'/.exec(card.question || '');
+  const sentence = introMatch ? introMatch[1] : (card.question || '');
+  for (let rep = 0; rep < 2; rep++) {
+    renderChapterReviewView(card, rep);
+    renderStatus('speaking');
+    await speak(`'${sentence}'를 영어로 말해보세요.`, 'ko-KR');
+    if (mode === 'HOME') return true;
+    if (repeatRequested) { repeatRequested = false; rep = -1; continue; } // 이 문장 2회부터 다시
+    if (nextRequested) { nextRequested = false; return false; } // 이 문장 건너뛰고 다음 셔플 카드로
+    renderStatus('idle');
+    await countdownWait(CONFIG.CHAPTER_REVIEW_WAIT_MS);
+    if (mode === 'HOME') return true;
+    if (repeatRequested) { repeatRequested = false; rep = -1; continue; }
+    if (nextRequested) { nextRequested = false; return false; }
+  }
+  return false;
+}
+
+async function startChapterReview() {
+  if (mode !== 'CHAPTER' || !chapterCards.length) return;
+  mode = 'CHAPTER_REVIEW';
+  el.voiceHint.style.display = 'none';
+  const shuffled = [...chapterCards];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  for (const card of shuffled) {
+    dlog(`챕터 셔플복습 (${currentChapter.title}): ${card.question}`);
+    const stopRequested = await runChapterReviewDrill(card);
+    if (mode === 'HOME') return;
+    if (stopRequested) break;
+  }
+  if (mode === 'HOME') return;
+  await speak(`${currentChapter.title} 복습을 마쳤어요. 수고하셨어요!`, 'ko-KR');
+  goHome();
 }
 
 /* ============ 신규학습 (Pimsleur 식 그라데이션 리콜) ============ */
@@ -586,14 +769,16 @@ el.card.addEventListener('click', (e) => {
     b.classList.toggle('active', parseFloat(b.dataset.rate) === speechRate);
   });
 });
-el.startNewBtn.addEventListener('click', () => {
+// 챕터 목록(홈 화면)에서 챕터 하나를 탭하면 그 챕터로 들어간다.
+el.home.addEventListener('click', (e) => {
+  const btn = e.target.closest('.chapter-item');
+  if (!btn) return;
   if (!SR) { alert('이 브라우저는 음성인식을 지원하지 않아요. Android Chrome을 사용해주세요.'); }
-  newLearningFlow();
+  enterChapter({ id: btn.dataset.chapterId, title: btn.dataset.chapterTitle });
 });
-el.startReviewBtn.addEventListener('click', () => {
-  if (!SR) { alert('이 브라우저는 음성인식을 지원하지 않아요. Android Chrome을 사용해주세요.'); }
-  reviewFlow();
-});
+if (el.btnChapterReview) {
+  el.btnChapterReview.addEventListener('click', () => { startChapterReview(); });
+}
 function interruptCurrentStep() {
   if (synth && synth.speaking) synth.cancel(); // 지금 말하던 안내는 여기서 끊기고, 이후 speak() 호출들은 전부 건너뜀
   if (recognizing) {
@@ -651,6 +836,7 @@ el.btnPause.addEventListener('click', () => {
   }
 });
 el.btnStop.addEventListener('click', async () => {
+  interruptCurrentStep(); // 진행 중이던 말하기/듣기를 즉시 끊어서 종료 반응이 느려지지 않게 함
   await speak('세션을 종료할게요.', 'ko-KR');
   goHome();
 });
