@@ -7,6 +7,7 @@ const CONFIG = {
   REVIEW_GET_PATH: '/repeat-study-review-get',
   GRADE_PATH: '/repeat-study-grade',
   GRADUATE_PATH: '/repeat-study-graduate',
+  REVIEW_COMPLETE_PATH: '/repeat-study-review-complete', // 채점 없이 SM-2 스케줄만 넘기는 웹훅
   MATERIALS_GET_PATH: '/repeat-study-materials-get',
   MAX_NEW_PER_SESSION: 8,
   ANSWER_TIMEOUT_MS: 8000,
@@ -515,9 +516,19 @@ async function runReviewLoop() {
       if (advance === 'STOP') { await speak('복습을 종료할게요. 안전 운전하세요.', 'ko-KR'); await finishReview(); return; }
       if (advance === 'REPEAT') { repeatThisCard = true; continue; }
 
-      // 채점을 안 하므로 항상 통과로 집계 — 서버 SM-2 스케줄은 GRADE_PATH를 안 불러서 갱신되지 않음(알려진 제약)
+      // 채점을 안 하므로 항상 통과로 집계하고, 무채점 전용 웹훅으로 SM-2 스케줄(다음복습일 등)만 갱신
       sessionStats.total++;
       sessionStats.correct++;
+      callWebhook(CONFIG.REVIEW_COMPLETE_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          card_id: card.id,
+          ease_factor: card.ease_factor,
+          interval_days: card.interval_days,
+          times_reviewed: card.times_reviewed
+        })
+      }).catch(() => {}); // 실패해도 음성 흐름은 계속 — 다음 복습 때 스케줄이 그대로일 뿐
     }
     reviewIndex++;
   }
