@@ -10,8 +10,14 @@ html,body{
 }
 #app{ display:flex; flex-direction:column; min-height:100vh; padding:20px; max-width:520px; margin:0 auto; }
 .top{ text-align:center; margin-bottom:12px; }
+.top-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .top h1{ font-size:22px; margin:0 0 4px; }
 .top p{ color:var(--muted); font-size:14px; margin:0; }
+.top-actions{ display:flex; gap:6px; margin-bottom:4px; }
+.top-actions button{
+  background:#1c2740; color:var(--text); border:1px solid #2a3a5c; border-radius:10px;
+  padding:6px 10px; font-size:16px; line-height:1; cursor:pointer;
+}
 .card{
   background:var(--card); border-radius:20px; padding:24px; flex:1;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -42,11 +48,14 @@ html,body{
 .modepick{ display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin-top:8px; }
 .stat-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
 .stat-chip{ background:#1c2740; color:var(--muted); padding:8px 14px; border-radius:999px; font-size:13px; }
-.footer-controls{ display:flex; justify-content:center; gap:14px; margin-top:14px; }
+.footer-controls{ display:flex; justify-content:center; gap:8px; margin-top:14px; flex-wrap:wrap; }
 .footer-controls button{
   background:#1c2740; color:var(--text); border:1px solid #2a3a5c; border-radius:14px;
-  padding:14px 18px; font-size:15px; min-width:84px;
+  padding:10px 8px; min-width:64px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
 }
+.footer-controls .fc-icon{ font-size:19px; line-height:1; }
+.footer-controls .fc-label{ font-size:11px; line-height:1; white-space:nowrap; }
 .footer-controls button.stop{ background:#3a1c22; border-color:#5c2a2a; color:var(--danger); }
 .small-note{ font-size:12px; color:var(--muted); text-align:center; margin-top:10px; }
 .toast{

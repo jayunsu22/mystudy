@@ -65,6 +65,7 @@ const RATE_OPTIONS = [0.7, 0.85, 1.0, 1.15];
 let speechRate = parseFloat(localStorage.getItem('repeatStudySpeechRate')) || 0.85;
 let isPaused = false;
 let pendingResumeListen = false;
+let repeatRequested = false; // "반복"/"이전대화" 버튼으로 강제 반복 요청 시 true — speak()/listenOnce()가 이걸 보고 즉시 넘어감
 let sessionStats = { correct: 0, total: 0, graduated: 0, materialTitles: new Set() };
 let learningQueue = [];
 let reviewQueue = [];
@@ -96,14 +97,18 @@ const el = {
   footer: document.getElementById('footerControls'),
   btnRepeat: document.getElementById('btnRepeat'),
   btnNext: document.getElementById('btnNext'),
+  btnPrevTurn: document.getElementById('btnPrevTurn'),
   btnStop: document.getElementById('btnStop'),
   btnPause: document.getElementById('btnPause'),
+  btnRefresh: document.getElementById('btnRefresh'),
+  btnHome: document.getElementById('btnHome'),
   voiceHint: document.getElementById('voiceHint'),
 };
 
 /* ============ 말하기/듣기 유틸 ============ */
 function speak(text, lang, onend) {
   return new Promise((resolve) => {
+    if (repeatRequested) { onend && onend(); resolve(); return; } // 반복 요청 시 남은 안내 문구는 건너뜀
     if (!synth) { onend && onend(); resolve(); return; }
     if (synth.paused) synth.resume(); // 일시정지 상태로 남아있으면 cancel()해도 새 발화가 밀릴 수 있음
     const u = new SpeechSynthesisUtterance(text);
@@ -150,6 +155,7 @@ function clearListenTimer() {
 
 function listenOnce(lang, timeoutMs) {
   return new Promise((resolve) => {
+    if (repeatRequested) { repeatRequested = false; resolve({ text: '반복', error: null }); return; }
     if (!recognition) { resolve({ text: '', error: 'no-speech-api' }); return; }
     let done = false;
     recognition.lang = lang || 'ko-KR';
@@ -167,6 +173,7 @@ function listenOnce(lang, timeoutMs) {
       recognition.onerror = null;
       recognition.onend = null;
       recognizing = false;
+      if (repeatRequested) { repeatRequested = false; result = { text: '반복', error: null }; }
       resolve(result);
     };
 
@@ -267,13 +274,20 @@ async function loadHomeCounts() {
   }
 }
 
+function setPauseBtnLabel(icon, label) {
+  if (!el.btnPause) return;
+  el.btnPause.innerHTML = `<span class="fc-icon">${icon}</span><span class="fc-label">${label}</span>`;
+}
+
 function goHome() {
   mode = 'HOME';
   clearTimeout(waitTimer);
   isPaused = false;
   pendingResumeListen = false;
+  repeatRequested = false;
   if (synth.paused) synth.resume(); // 일시정지 상태로 홈에 돌아가면 TTS 엔진이 계속 멈춰있지 않도록
-  if (el.btnPause) { el.btnPause.textContent = '⏸ 일시정지'; el.btnPause.classList.remove('paused'); }
+  setPauseBtnLabel('⏸', '일시정지');
+  if (el.btnPause) el.btnPause.classList.remove('paused');
   el.footer.style.display = 'none';
   el.voiceHint.style.display = 'none';
   el.card.innerHTML = '';
@@ -369,6 +383,7 @@ async function runLearningLoop() {
 
       const cmd = matchCommand(text);
       if (cmd === 'STOP') { await speak('신규학습을 종료할게요.', 'ko-KR'); goHome(); return; }
+      if (cmd === 'REPEAT') { repeatThisCard = true; continue; }
 
       let result;
       try {
@@ -568,8 +583,19 @@ el.startReviewBtn.addEventListener('click', () => {
   if (!SR) { alert('이 브라우저는 음성인식을 지원하지 않아요. Android Chrome을 사용해주세요.'); }
   reviewFlow();
 });
-el.btnRepeat.addEventListener('click', () => { /* 다음 루프에서 같은 카드가 다시 나올 때 자연히 처리됨 */ });
+function triggerRepeat() {
+  if (mode === 'HOME') return;
+  repeatRequested = true;
+  if (synth && synth.speaking) synth.cancel(); // 지금 말하던 안내는 여기서 끊기고, 이후 speak() 호출들은 전부 건너뜀
+  if (recognizing) {
+    try { recognition.abort(); } catch (e) {} // 듣던 중이면 종료시켜서 finish()가 '반복'으로 바로 넘겨받게 함
+  }
+}
+el.btnRepeat.addEventListener('click', triggerRepeat);
+el.btnPrevTurn.addEventListener('click', triggerRepeat); // "이전대화" = 직전 자리(같은 카드)를 처음부터 다시 듣기
 el.btnNext.addEventListener('click', () => { if (mode === 'REVIEW') reviewIndex++; });
+el.btnRefresh.addEventListener('click', () => { location.reload(); });
+el.btnHome.addEventListener('click', () => { goHome(); });
 el.btnPause.addEventListener('click', () => {
   if (!isPaused) {
     isPaused = true;
@@ -580,12 +606,12 @@ el.btnPause.addEventListener('click', () => {
       try { recognition.abort(); } catch (e) {}
       recognizing = false;
     }
-    el.btnPause.textContent = '▶ 계속';
+    setPauseBtnLabel('▶', '계속');
     el.btnPause.classList.add('paused');
     renderStatus('paused');
   } else {
     isPaused = false;
-    el.btnPause.textContent = '⏸ 일시정지';
+    setPauseBtnLabel('⏸', '일시정지');
     el.btnPause.classList.remove('paused');
     if (synth.paused) synth.resume();
     if (pendingResumeListen) {
