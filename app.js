@@ -75,7 +75,8 @@ let currentChapter = null; // { id, title } — 지금 들어가 있는 챕터
 let chapterCards = [];
 let chapterIndex = 0;
 let chapterJumpIndex = null; // 드롭다운으로 다른 문장을 골랐을 때 다음에 진행할 인덱스
-const RATE_OPTIONS = [0.7, 0.85, 1.0, 1.15];
+const RATE_OPTIONS = [0.7, 0.85, 1.0, 1.15, 1.3, 1.6]; // 영어는 ENGLISH_RATE_MULTIPLIER가 곱해져서 늘 이보다 느림 —
+// 기기 TTS 엔진에 따라 최대 배속(1.15x)에서도 영어가 늘어지는 경우가 있어 더 빠른 옵션을 추가해둠
 const ENGLISH_RATE_MULTIPLIER = 0.595; // 영어 문장(정답)은 발음이 또박또박 들리도록 한국어 안내보다 항상 느리게(기존 0.7배에서 15% 더 느리게) 재생
 let speechRate = parseFloat(localStorage.getItem('repeatStudySpeechRate')) || 0.85;
 let isPaused = false;
