@@ -61,6 +61,8 @@ function renderDebugPanel() {
 /* ============ 상태 ============ */
 let mode = 'HOME'; // HOME | NEW | REVIEW
 let recognizing = false;
+const RATE_OPTIONS = [0.7, 0.85, 1.0, 1.15];
+let speechRate = parseFloat(localStorage.getItem('repeatStudySpeechRate')) || 0.85;
 let sessionStats = { correct: 0, total: 0, graduated: 0, materialTitles: new Set() };
 let learningQueue = [];
 let reviewQueue = [];
@@ -96,7 +98,7 @@ function speak(text, lang, onend) {
     if (!synth) { onend && onend(); resolve(); return; }
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang || 'ko-KR';
-    u.rate = 0.98;
+    u.rate = speechRate;
     u.onend = () => { onend && onend(); resolve(); };
     u.onerror = () => { onend && onend(); resolve(); };
     synth.cancel();
@@ -163,6 +165,12 @@ function answerLangFor(card) {
   return card.card_type === 'VOCAB' ? 'en-US' : 'ko-KR';
 }
 
+function rateButtonsHtml() {
+  return `<div class="rate-row">${RATE_OPTIONS.map(r =>
+    `<button class="rate-btn${r === speechRate ? ' active' : ''}" data-rate="${r}">${r}x</button>`
+  ).join('')}</div>`;
+}
+
 /* ============ 홈 화면 ============ */
 async function loadHomeCounts() {
   el.statRow.innerHTML = `<div class="stat-chip">불러오는 중...</div>`;
@@ -197,6 +205,7 @@ function renderLearningView(card, phaseLabel) {
   el.footer.style.display = 'flex';
   el.voiceHint.style.display = 'block';
   el.card.innerHTML = `
+    ${rateButtonsHtml()}
     <div class="phase-tag new">🌱 신규학습 · ${phaseLabel}</div>
     <div class="subject-tag">${card.material_title || ''}</div>
     <div id="statusLine" class="status-line"><span class="status-dot"></span><span class="status-text">대기 중</span></div>
@@ -319,6 +328,7 @@ function renderReviewView(card) {
   el.footer.style.display = 'flex';
   el.voiceHint.style.display = 'block';
   el.card.innerHTML = `
+    ${rateButtonsHtml()}
     <div class="phase-tag review">🔁 복습 · ${reviewIndex + 1}/${reviewQueue.length}</div>
     <div class="subject-tag">${card.material_title || ''}</div>
     <div id="statusLine" class="status-line"><span class="status-dot"></span><span class="status-text">대기 중</span></div>
@@ -416,6 +426,15 @@ async function finishReview() {
 }
 
 /* ============ 이벤트 바인딩 ============ */
+el.card.addEventListener('click', (e) => {
+  const btn = e.target.closest('.rate-btn');
+  if (!btn) return;
+  speechRate = parseFloat(btn.dataset.rate);
+  localStorage.setItem('repeatStudySpeechRate', String(speechRate));
+  el.card.querySelectorAll('.rate-btn').forEach((b) => {
+    b.classList.toggle('active', parseFloat(b.dataset.rate) === speechRate);
+  });
+});
 el.startNewBtn.addEventListener('click', () => {
   if (!SR) { alert('이 브라우저는 음성인식을 지원하지 않아요. Android Chrome을 사용해주세요.'); }
   newLearningFlow();
