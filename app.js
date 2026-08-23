@@ -75,7 +75,7 @@ let recognition = null;
 if (SR) {
   recognition = new SR();
   recognition.continuous = false;
-  recognition.interimResults = false;
+  recognition.interimResults = true;
   recognition.maxAlternatives = 3;
 }
 
@@ -124,7 +124,16 @@ function listenOnce(lang, timeoutMs) {
       resolve(result);
     };
 
-    recognition.onresult = (e) => finish({ text: e.results[0][0].transcript.trim(), error: null });
+    recognition.onresult = (e) => {
+      const res = e.results[e.results.length - 1];
+      const transcript = res[0].transcript.trim();
+      if (res.isFinal) {
+        finish({ text: transcript, error: null });
+      } else {
+        const heardEl = document.getElementById('heardText');
+        if (heardEl) heardEl.textContent = `듣는 중: "${transcript}"`;
+      }
+    };
     recognition.onerror = (e) => finish({ text: '', error: e.error });
     recognition.onend = () => finish({ text: '', error: 'ended' });
 
