@@ -57,3 +57,8 @@ html,body{
 }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 .toast.show.error{ border-color:#5c2a2a; background:#3a1c22; color:#ffb3b3; }
+.answer{ font-size:20px; font-weight:700; color:var(--accent); background:#132038; padding:10px 16px; border-radius:12px; width:100%; }
+.rate-row{ display:flex; gap:6px; justify-content:center; margin-bottom:4px; }
+.rate-btn{ background:#1c2740; color:var(--muted); border:1px solid #2a3a5c; border-radius:10px; padding:6px 10px; font-size:12px; cursor:pointer; }
+.rate-btn.active{ background:var(--accent); color:#04182b; border-color:var(--accent); font-weight:700; }
+.footer-controls button.paused{ background:#332a1a; border-color:#5c4a2a; color:var(--warn); }
