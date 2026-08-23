@@ -871,7 +871,7 @@
             {
               "id": "최근결과",
               "displayName": "최근결과",
-              "type": "options",
+              "type": "string",
               "required": false,
               "display": true,
               "canBeUsedToMatch": true,
@@ -942,7 +942,7 @@
             {
               "id": "모드",
               "displayName": "모드",
-              "type": "options",
+              "type": "string",
               "required": false,
               "display": true,
               "canBeUsedToMatch": true,
@@ -951,7 +951,7 @@
             {
               "id": "단계",
               "displayName": "단계",
-              "type": "options",
+              "type": "string",
               "required": false,
               "display": true,
               "canBeUsedToMatch": true,
