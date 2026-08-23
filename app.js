@@ -227,7 +227,6 @@ async function teachAndPrompt(card, introText) {
   const answerEl = document.getElementById('answerText');
   if (answerEl) { answerEl.textContent = card.model_answer; answerEl.style.display = 'block'; }
   await speak(`정답은 ${card.model_answer}입니다.`, 'ko-KR');
-  if (answerEl) { answerEl.style.display = 'none'; answerEl.textContent = ''; }
   await speak('따라 말해보세요.', 'ko-KR');
 }
 
