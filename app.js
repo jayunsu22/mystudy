@@ -157,7 +157,7 @@ function matchCommand(text) {
   const t = (text || '').toLowerCase();
   if (/그만|정지|멈춰|종료|stop|quit|exit/.test(t)) return 'STOP';
   if (/반복|다시|again|repeat/.test(t)) return 'REPEAT';
-  if (/다음|next|skip|모르겠|패스/.test(t)) return 'NEXT';
+  if (/다음|next|skip|모르겠|패스|넘어가/.test(t)) return 'NEXT';
   return null;
 }
 
@@ -168,6 +168,29 @@ function renderStatus(kind) {
   dot.className = 'status-dot' + (kind === 'idle' ? '' : ' ' + kind);
   statusEl.querySelector('.status-text').textContent =
     kind === 'listening' ? '듣고 있어요...' : kind === 'speaking' ? '말하는 중...' : '대기 중';
+}
+
+async function teachAndPrompt(card, introText) {
+  if (introText) {
+    await speak(introText, 'ko-KR');
+  }
+  await speak(card.question, 'ko-KR');
+  const answerEl = document.getElementById('answerText');
+  if (answerEl) { answerEl.textContent = card.model_answer; answerEl.style.display = 'block'; }
+  await speak(`정답은 ${card.model_answer}입니다.`, 'ko-KR');
+  if (answerEl) { answerEl.style.display = 'none'; answerEl.textContent = ''; }
+  await speak('따라 말해보세요.', 'ko-KR');
+}
+
+async function confirmAdvance() {
+  await speak('다음으로 넘어갈까요?', 'ko-KR');
+  renderStatus('listening');
+  const { text, error } = await listenOnce('ko-KR', CONFIG.ANSWER_TIMEOUT_MS);
+  dlog(`다음 확인 응답: "${text}"` + (error ? ` (에러: ${error})` : ''));
+  const cmd = matchCommand(text);
+  if (cmd === 'STOP') return 'STOP';
+  if (cmd === 'REPEAT') return 'REPEAT';
+  return 'NEXT';
 }
 
 function answerLangFor(card) {
@@ -220,6 +243,7 @@ function renderLearningView(card, phaseLabel) {
     <div id="statusLine" class="status-line"><span class="status-dot"></span><span class="status-text">대기 중</span></div>
     <div class="question">${card.question}</div>
     <div class="hint">${card.hint || ''}</div>
+    <div class="answer" id="answerText" style="display:none;"></div>
     <div class="heard" id="heardText"></div>
     <div class="feedback" id="feedbackText" style="display:none;"></div>
     <div class="pron-tip" id="pronTip" style="display:none;"></div>
@@ -266,67 +290,77 @@ async function runLearningLoop() {
     const item = action.item;
     const card = item.card;
     if (card.material_title) sessionStats.materialTitles.add(card.material_title);
+    const isIntroduce = action.type === 'introduce';
+    if (isIntroduce) item.introduced = true;
 
-    if (action.type === 'introduce') {
-      item.introduced = true;
-      renderLearningView(card, '처음 배우기');
+    let repeatThisCard = true;
+    while (repeatThisCard) {
+      repeatThisCard = false;
+
+      if (isIntroduce) {
+        renderLearningView(card, '처음 배우기');
+        renderStatus('speaking');
+        dlog(`신규 소개: ${card.question}`);
+        await teachAndPrompt(card, null);
+      } else {
+        renderLearningView(card, `재확인 ${item.stepIndex}/${SrsUtils.STEP_INTERVALS_MIN.length - 1}`);
+        renderStatus('speaking');
+        dlog(`신규 재확인: ${card.question}`);
+        await teachAndPrompt(card, '다시 확인할게요.');
+      }
+
+      renderStatus('listening');
+      const { text, error } = await listenOnce(answerLangFor(card), CONFIG.ANSWER_TIMEOUT_MS);
+      document.getElementById('heardText').textContent = text ? `내가 말한 것: "${text}"` : '(응답을 듣지 못했어요)';
+      dlog(`답변: "${text}"` + (error ? ` (에러: ${error})` : ''));
+
+      const cmd = matchCommand(text);
+      if (cmd === 'STOP') { await speak('신규학습을 종료할게요.', 'ko-KR'); goHome(); return; }
+
+      let result;
+      try {
+        result = await callWebhook(CONFIG.GRADE_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(SrsUtils.buildGradePayload({ card, phase: '신규', mode: 'VOICE', userAnswer: text }))
+        });
+      } catch (e) { repeatThisCard = true; continue; }
+
+      sessionStats.total++;
+      if (result.correct) sessionStats.correct++;
+
+      const fbEl = document.getElementById('feedbackText');
+      fbEl.style.display = 'block';
+      fbEl.className = 'feedback ' + (result.correct ? 'correct' : 'incorrect');
+      fbEl.textContent = result.feedback_ko;
+      const pronEl = document.getElementById('pronTip');
+      if (result.pronunciation_tip) {
+        pronEl.style.display = 'block';
+        pronEl.textContent = `🗣️ ${result.pronunciation_tip}`;
+      } else {
+        pronEl.style.display = 'none';
+      }
+
       renderStatus('speaking');
-      dlog(`신규 소개: ${card.question}`);
-      await speak(`${card.question} 정답은 ${card.model_answer}입니다. 따라 말해보세요.`, 'ko-KR');
-    } else {
-      renderLearningView(card, `재확인 ${item.stepIndex}/${SrsUtils.STEP_INTERVALS_MIN.length - 1}`);
-      renderStatus('speaking');
-      dlog(`신규 재확인: ${card.question}`);
-      await speak(`다시 확인할게요. ${card.question}`, 'ko-KR');
-    }
+      let feedbackToSpeak = result.feedback_ko;
+      if (result.pronunciation_tip) feedbackToSpeak += ` ${result.pronunciation_tip}`;
+      await speak(feedbackToSpeak, 'ko-KR');
 
-    renderStatus('listening');
-    const { text, error } = await listenOnce(answerLangFor(card), CONFIG.ANSWER_TIMEOUT_MS);
-    document.getElementById('heardText').textContent = text ? `내가 말한 것: "${text}"` : '(응답을 듣지 못했어요)';
-    dlog(`답변: "${text}"` + (error ? ` (에러: ${error})` : ''));
+      const advance = await confirmAdvance();
+      if (advance === 'STOP') { await speak('신규학습을 종료할게요.', 'ko-KR'); goHome(); return; }
+      if (advance === 'REPEAT') { repeatThisCard = true; continue; }
 
-    const cmd = matchCommand(text);
-    if (cmd === 'STOP') { await speak('신규학습을 종료할게요.', 'ko-KR'); goHome(); return; }
-
-    let result;
-    try {
-      result = await callWebhook(CONFIG.GRADE_PATH, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(SrsUtils.buildGradePayload({ card, phase: '신규', mode: 'VOICE', userAnswer: text }))
-      });
-    } catch (e) { continue; }
-
-    sessionStats.total++;
-    if (result.correct) sessionStats.correct++;
-
-    const fbEl = document.getElementById('feedbackText');
-    fbEl.style.display = 'block';
-    fbEl.className = 'feedback ' + (result.correct ? 'correct' : 'incorrect');
-    fbEl.textContent = result.feedback_ko;
-    const pronEl = document.getElementById('pronTip');
-    if (result.pronunciation_tip) {
-      pronEl.style.display = 'block';
-      pronEl.textContent = `🗣️ ${result.pronunciation_tip}`;
-    } else {
-      pronEl.style.display = 'none';
-    }
-
-    renderStatus('speaking');
-    let feedbackToSpeak = result.feedback_ko;
-    if (result.pronunciation_tip) feedbackToSpeak += ` ${result.pronunciation_tip}`;
-    await speak(feedbackToSpeak, 'ko-KR');
-
-    SrsUtils.recordLearningResult(item, !!result.correct, Date.now());
-    if (item.graduated) {
-      sessionStats.graduated++;
-      dlog(`졸업: ${card.question}`);
-      callWebhook(CONFIG.GRADUATE_PATH, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ card_id: card.id })
-      }).catch(() => {}); // 실패해도 학습 흐름은 계속
-      await speak('이 표현은 오늘 저녁 복습에서 다시 만나요!', 'ko-KR');
+      SrsUtils.recordLearningResult(item, !!result.correct, Date.now());
+      if (item.graduated) {
+        sessionStats.graduated++;
+        dlog(`졸업: ${card.question}`);
+        callWebhook(CONFIG.GRADUATE_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_id: card.id })
+        }).catch(() => {}); // 실패해도 학습 흐름은 계속
+        await speak('이 표현은 오늘 저녁 복습에서 다시 만나요!', 'ko-KR');
+      }
     }
   }
 }
@@ -343,6 +377,7 @@ function renderReviewView(card) {
     <div id="statusLine" class="status-line"><span class="status-dot"></span><span class="status-text">대기 중</span></div>
     <div class="question">${card.question}</div>
     <div class="hint">${card.hint || ''}</div>
+    <div class="answer" id="answerText" style="display:none;"></div>
     <div class="heard" id="heardText"></div>
     <div class="feedback" id="feedbackText" style="display:none;"></div>
     <div class="pron-tip" id="pronTip" style="display:none;"></div>
@@ -373,49 +408,58 @@ async function runReviewLoop() {
   while (reviewIndex < reviewQueue.length) {
     const card = reviewQueue[reviewIndex];
     if (card.material_title) sessionStats.materialTitles.add(card.material_title);
-    renderReviewView(card);
-    renderStatus('speaking');
-    dlog(`복습 질문 (${reviewIndex + 1}/${reviewQueue.length}): ${card.question}`);
-    await speak(card.question, 'ko-KR');
 
-    renderStatus('listening');
-    const { text, error } = await listenOnce(answerLangFor(card), CONFIG.ANSWER_TIMEOUT_MS);
-    document.getElementById('heardText').textContent = text ? `내가 말한 것: "${text}"` : '(응답을 듣지 못했어요)';
-    dlog(`답변: "${text}"` + (error ? ` (에러: ${error})` : ''));
+    let repeatThisCard = true;
+    while (repeatThisCard) {
+      repeatThisCard = false;
+      renderReviewView(card);
+      renderStatus('speaking');
+      dlog(`복습 질문 (${reviewIndex + 1}/${reviewQueue.length}): ${card.question}`);
+      await teachAndPrompt(card, null);
 
-    const cmd = matchCommand(text);
-    if (cmd === 'STOP') { await speak('복습을 종료할게요. 안전 운전하세요.', 'ko-KR'); await finishReview(); return; }
-    if (cmd === 'REPEAT') { continue; }
-    if (cmd === 'NEXT') { reviewIndex++; continue; }
+      renderStatus('listening');
+      const { text, error } = await listenOnce(answerLangFor(card), CONFIG.ANSWER_TIMEOUT_MS);
+      document.getElementById('heardText').textContent = text ? `내가 말한 것: "${text}"` : '(응답을 듣지 못했어요)';
+      dlog(`답변: "${text}"` + (error ? ` (에러: ${error})` : ''));
 
-    let result;
-    try {
-      result = await callWebhook(CONFIG.GRADE_PATH, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(SrsUtils.buildGradePayload({ card, phase: '복습', mode: 'VOICE', userAnswer: text }))
-      });
-    } catch (e) { continue; }
+      const cmd = matchCommand(text);
+      if (cmd === 'STOP') { await speak('복습을 종료할게요. 안전 운전하세요.', 'ko-KR'); await finishReview(); return; }
+      if (cmd === 'REPEAT') { repeatThisCard = true; continue; }
+      if (cmd === 'NEXT') { break; }
 
-    sessionStats.total++;
-    if (result.correct) sessionStats.correct++;
+      let result;
+      try {
+        result = await callWebhook(CONFIG.GRADE_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(SrsUtils.buildGradePayload({ card, phase: '복습', mode: 'VOICE', userAnswer: text }))
+        });
+      } catch (e) { repeatThisCard = true; continue; }
 
-    const fbEl = document.getElementById('feedbackText');
-    fbEl.style.display = 'block';
-    fbEl.className = 'feedback ' + (result.correct ? 'correct' : 'incorrect');
-    fbEl.textContent = result.feedback_ko;
-    const pronEl = document.getElementById('pronTip');
-    if (result.pronunciation_tip) {
-      pronEl.style.display = 'block';
-      pronEl.textContent = `🗣️ ${result.pronunciation_tip}`;
-    } else {
-      pronEl.style.display = 'none';
+      sessionStats.total++;
+      if (result.correct) sessionStats.correct++;
+
+      const fbEl = document.getElementById('feedbackText');
+      fbEl.style.display = 'block';
+      fbEl.className = 'feedback ' + (result.correct ? 'correct' : 'incorrect');
+      fbEl.textContent = result.feedback_ko;
+      const pronEl = document.getElementById('pronTip');
+      if (result.pronunciation_tip) {
+        pronEl.style.display = 'block';
+        pronEl.textContent = `🗣️ ${result.pronunciation_tip}`;
+      } else {
+        pronEl.style.display = 'none';
+      }
+
+      renderStatus('speaking');
+      let feedbackToSpeak = result.feedback_ko;
+      if (result.pronunciation_tip) feedbackToSpeak += ` ${result.pronunciation_tip}`;
+      await speak(feedbackToSpeak, 'ko-KR');
+
+      const advance = await confirmAdvance();
+      if (advance === 'STOP') { await speak('복습을 종료할게요. 안전 운전하세요.', 'ko-KR'); await finishReview(); return; }
+      if (advance === 'REPEAT') { repeatThisCard = true; continue; }
     }
-
-    renderStatus('speaking');
-    let feedbackToSpeak = result.feedback_ko;
-    if (result.pronunciation_tip) feedbackToSpeak += ` ${result.pronunciation_tip}`;
-    await speak(feedbackToSpeak, 'ko-KR');
     reviewIndex++;
   }
   await finishReview();
