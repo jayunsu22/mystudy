@@ -71,6 +71,12 @@ let reviewQueue = [];
 let reviewIndex = 0;
 let waitTimer = null;
 
+// listenOnce()의 8초 타임아웃 타이머 — 일시정지 중에는 멈추고, 재개 시 남은 시간만큼만 다시 돌린다.
+let listenTimerId = null;
+let listenTimerArmedAt = null;
+let listenTimerDurationMs = null;
+let listenTimeoutCallback = null;
+
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const synth = window.speechSynthesis;
 let recognition = null;
@@ -99,6 +105,7 @@ const el = {
 function speak(text, lang, onend) {
   return new Promise((resolve) => {
     if (!synth) { onend && onend(); resolve(); return; }
+    if (synth.paused) synth.resume(); // 일시정지 상태로 남아있으면 cancel()해도 새 발화가 밀릴 수 있음
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang || 'ko-KR';
     u.rate = speechRate;
@@ -109,17 +116,53 @@ function speak(text, lang, onend) {
   });
 }
 
+/* listenOnce()의 타임아웃 타이머를 일시정지/재개와 맞물려 다루기 위한 헬퍼.
+   recognition은 싱글턴이라 한 번에 하나의 listenOnce만 활성 상태라고 가정한다. */
+function armListenTimer(durationMs) {
+  clearTimeout(listenTimerId);
+  listenTimerArmedAt = Date.now();
+  listenTimerDurationMs = durationMs;
+  listenTimerId = setTimeout(() => {
+    listenTimerId = null;
+    if (listenTimeoutCallback) listenTimeoutCallback();
+  }, durationMs);
+}
+
+function pauseListenTimer() {
+  if (listenTimerId === null) return;
+  clearTimeout(listenTimerId);
+  listenTimerId = null;
+  const elapsed = Date.now() - listenTimerArmedAt;
+  listenTimerDurationMs = Math.max(0, listenTimerDurationMs - elapsed);
+}
+
+function resumeListenTimer() {
+  if (!listenTimeoutCallback) return; // 진행 중인 listenOnce가 없으면 아무것도 하지 않음
+  armListenTimer(listenTimerDurationMs);
+}
+
+function clearListenTimer() {
+  clearTimeout(listenTimerId);
+  listenTimerId = null;
+  listenTimerArmedAt = null;
+  listenTimerDurationMs = null;
+}
+
 function listenOnce(lang, timeoutMs) {
   return new Promise((resolve) => {
     if (!recognition) { resolve({ text: '', error: 'no-speech-api' }); return; }
     let done = false;
-    let timer = null;
     recognition.lang = lang || 'ko-KR';
 
+    // onend/onerror/타임아웃 세 경로 모두 여기로 모인다 — 일시정지 중이면(재개 대기 중이면)
+    // 어느 경로로도 절대 종료하지 않는다. 재개되면 recognition이 이어서 이벤트를 계속 쏘고,
+    // 그때 isPaused/pendingResumeListen이 이미 false이므로 정상적으로 finish()된다.
     const finish = (result) => {
+      if (isPaused && pendingResumeListen) return;
       if (done) return;
       done = true;
-      clearTimeout(timer);
+      clearListenTimer();
+      listenTimeoutCallback = null;
       recognition.onresult = null;
       recognition.onerror = null;
       recognition.onend = null;
@@ -138,10 +181,7 @@ function listenOnce(lang, timeoutMs) {
       }
     };
     recognition.onerror = (e) => finish({ text: '', error: e.error });
-    recognition.onend = () => {
-      if (isPaused) return; // 일시정지로 인한 중단 — 재개 시 recognition.start()로 이어감, 여기서 끝내지 않음
-      finish({ text: '', error: 'ended' });
-    };
+    recognition.onend = () => finish({ text: '', error: 'ended' });
 
     try {
       recognition.start();
@@ -152,10 +192,11 @@ function listenOnce(lang, timeoutMs) {
       return;
     }
 
-    timer = setTimeout(() => {
+    listenTimeoutCallback = () => {
       try { recognition.stop(); } catch (e) {}
       finish({ text: '', error: 'timeout' });
-    }, timeoutMs || CONFIG.ANSWER_TIMEOUT_MS);
+    };
+    armListenTimer(timeoutMs || CONFIG.ANSWER_TIMEOUT_MS);
   });
 }
 
@@ -232,6 +273,7 @@ function goHome() {
   clearTimeout(waitTimer);
   isPaused = false;
   pendingResumeListen = false;
+  if (synth.paused) synth.resume(); // 일시정지 상태로 홈에 돌아가면 TTS 엔진이 계속 멈춰있지 않도록
   if (el.btnPause) { el.btnPause.textContent = '⏸ 일시정지'; el.btnPause.classList.remove('paused'); }
   el.footer.style.display = 'none';
   el.voiceHint.style.display = 'none';
@@ -305,6 +347,7 @@ async function runLearningLoop() {
     if (isIntroduce) item.introduced = true;
 
     let repeatThisCard = true;
+    let gradeFailCount = 0; // 이 카드에 한해 채점 실패 연속 횟수 — 카드가 바뀌면 초기화됨
     while (repeatThisCard) {
       repeatThisCard = false;
 
@@ -335,7 +378,16 @@ async function runLearningLoop() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(SrsUtils.buildGradePayload({ card, phase: '신규', mode: 'VOICE', userAnswer: text }))
         });
-      } catch (e) { repeatThisCard = true; continue; }
+      } catch (e) {
+        gradeFailCount++;
+        if (gradeFailCount > 2) {
+          await speak('서버 연결이 불안정해요. 잠시 후 다시 시도해주세요.', 'ko-KR');
+          goHome();
+          return;
+        }
+        repeatThisCard = true;
+        continue;
+      }
 
       sessionStats.total++;
       if (result.correct) sessionStats.correct++;
@@ -421,6 +473,7 @@ async function runReviewLoop() {
     if (card.material_title) sessionStats.materialTitles.add(card.material_title);
 
     let repeatThisCard = true;
+    let gradeFailCount = 0; // 이 카드에 한해 채점 실패 연속 횟수 — 카드가 바뀌면 초기화됨
     while (repeatThisCard) {
       repeatThisCard = false;
       renderReviewView(card);
@@ -445,7 +498,16 @@ async function runReviewLoop() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(SrsUtils.buildGradePayload({ card, phase: '복습', mode: 'VOICE', userAnswer: text }))
         });
-      } catch (e) { repeatThisCard = true; continue; }
+      } catch (e) {
+        gradeFailCount++;
+        if (gradeFailCount > 2) {
+          await speak('서버 연결이 불안정해요. 잠시 후 다시 시도해주세요.', 'ko-KR');
+          await finishReview();
+          return;
+        }
+        repeatThisCard = true;
+        continue;
+      }
 
       sessionStats.total++;
       if (result.correct) sessionStats.correct++;
@@ -515,6 +577,7 @@ el.btnPause.addEventListener('click', () => {
     if (synth.speaking) synth.pause();
     if (recognizing) {
       pendingResumeListen = true;
+      pauseListenTimer(); // 남은 타임아웃 시간을 기록하고 타이머는 멈춤 — 일시정지 중엔 절대 만료되지 않게
       try { recognition.abort(); } catch (e) {}
       recognizing = false;
     }
@@ -532,7 +595,10 @@ el.btnPause.addEventListener('click', () => {
         recognition.start();
         recognizing = true;
         renderStatus('listening');
+        resumeListenTimer(); // 일시정지 전에 남아있던 시간만큼만 다시 카운트다운
       } catch (e) {}
+    } else {
+      renderStatus(synth.speaking ? 'speaking' : 'idle');
     }
   }
 });
