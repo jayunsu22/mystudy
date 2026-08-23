@@ -2,147 +2,252 @@
   "name": "RepeatStudy - Backend",
   "nodes": [
     {
-      "parameters": { "httpMethod": "GET", "path": "repeat-study-new-get", "responseMode": "responseNode", "options": {} },
-      "id": "wh_new_get",
+      "parameters": {
+        "path": "repeat-study-new-get",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "07074b4e-c7c3-4f49-9cb7-4450c43a0807",
       "name": "1. GET 신규카드 조회 Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 100],
+      "position": [
+        717696,
+        534288
+      ],
       "webhookId": "repeat-study-new-get"
     },
     {
       "parameters": {
-        "operation": "list",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "카드", "mode": "name" },
-        "returnAll": true,
-        "options": { "filterByFormula": "=AND({활성}=1,{단계}='신규')" }
+        "operation": "search",
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        },
+        "filterByFormula": "AND({활성}=1,{단계}='신규')",
+        "options": {}
       },
-      "id": "at_new_list",
+      "id": "68262efb-d3ed-47cd-95b8-9b9d4cad22a6",
       "name": "Airtable: 신규 카드 조회",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [450, 100],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        717952,
+        534288
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
       "parameters": {
         "jsCode": "const cards = $input.all().map(i => ({\n  id: i.json.id,\n  question: i.json.질문,\n  model_answer: i.json.모범답안,\n  hint: i.json.힌트 || '',\n  card_type: i.json.유형,\n  material_title: (i.json.자료명 && i.json.자료명[0]) || ''\n}));\nreturn [{ json: { cards } }];"
       },
-      "id": "code_new_map",
+      "id": "9282126b-5324-4bca-acc2-f773cc965bfe",
       "name": "카드 목록 정리",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 100]
+      "position": [
+        718208,
+        534288
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ $json }}" },
-      "id": "resp_new",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "5f64cc88-0953-45c1-92f2-f55b0fb1ed5a",
       "name": "응답 (신규조회)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [950, 100]
+      "position": [
+        718448,
+        534288
+      ]
     },
-
     {
-      "parameters": { "httpMethod": "GET", "path": "repeat-study-review-get", "responseMode": "responseNode", "options": {} },
-      "id": "wh_review_get",
+      "parameters": {
+        "path": "repeat-study-review-get",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d3672d97-f3e8-481b-b3af-7335f50ee03d",
       "name": "2. GET 복습카드 조회 Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 350],
+      "position": [
+        717696,
+        534544
+      ],
       "webhookId": "repeat-study-review-get"
     },
     {
       "parameters": {
-        "operation": "list",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "카드", "mode": "name" },
-        "returnAll": true,
-        "options": { "filterByFormula": "=AND({활성}=1,{단계}='복습',{다음복습일}<=TODAY())" }
+        "operation": "search",
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        },
+        "filterByFormula": "AND({활성}=1,{단계}='복습',{다음복습일}<=TODAY())",
+        "options": {}
       },
-      "id": "at_review_list",
+      "id": "0bbf26ce-d46a-4a90-9c8c-501a90d8daf1",
       "name": "Airtable: 복습 대상 카드 조회",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [450, 350],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        717952,
+        534544
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
       "parameters": {
         "jsCode": "const cards = $input.all().map(i => ({\n  id: i.json.id,\n  question: i.json.질문,\n  model_answer: i.json.모범답안,\n  hint: i.json.힌트 || '',\n  card_type: i.json.유형,\n  material_title: (i.json.자료명 && i.json.자료명[0]) || '',\n  ease_factor: i.json.이지팩터 || 2.5,\n  interval_days: i.json.간격일수 || 1,\n  times_reviewed: i.json.복습횟수 || 0\n}));\n// 오늘 새로 졸업한 카드와 예전부터 있던 카드를 섞기 위해 무작위 셔플\nfor (let idx = cards.length - 1; idx > 0; idx--) {\n  const j = Math.floor(Math.random() * (idx + 1));\n  [cards[idx], cards[j]] = [cards[j], cards[idx]];\n}\nreturn [{ json: { cards } }];"
       },
-      "id": "code_review_map",
+      "id": "7c0d6b5f-2246-45e7-863d-65a56ead0583",
       "name": "카드 목록 정리+셔플",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 350]
+      "position": [
+        718208,
+        534544
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ $json }}" },
-      "id": "resp_review",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "8ea277ca-dae1-4d68-b3fb-ed5ef16a34fb",
       "name": "응답 (복습조회)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [950, 350]
+      "position": [
+        718448,
+        534544
+      ]
     },
-
     {
-      "parameters": { "httpMethod": "POST", "path": "repeat-study-grade", "responseMode": "responseNode", "options": {} },
-      "id": "wh_grade",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "repeat-study-grade",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d7af8691-00ae-40d9-a22c-0d3c3d6b914a",
       "name": "3. POST 답변 채점 Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 620],
+      "position": [
+        717696,
+        534816
+      ],
       "webhookId": "repeat-study-grade"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $credentials.googleApiKey }}",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ contents: [ { parts: [ { text: `당신은 친절하지만 정확한 학습 코치입니다. 아래 문제에 대한 사용자의 답이 모범답안과 의미상 맞는지 판단하세요. 사용자의 답은 음성인식(STT) 결과이므로 발음이 부정확하면 이상하게 들릴 수 있습니다.\\n\\n문제: ${$json.body.question}\\n모범답안: ${$json.body.model_answer}\\n사용자 답변(음성인식 결과): ${$json.body.user_answer}\\n\\n판단 기준:\\n- 핵심 의미가 통하면 정답으로 처리하세요(철자/토씨가 완전히 같을 필요 없음).\\n- 음성인식 결과가 모범답안과 발음상 비슷하지만 다른 단어로 잘못 인식된 것 같다면, pronunciation_tip에 정확한 발음 팁을 한국어로 짧게 적어주세요(강세 위치 등). 문제 없어 보이면 pronunciation_tip은 빈 문자열로 두세요.\\n- 응답이 없거나 인식이 안 된 경우 오답으로 처리하고 feedback_ko에 '못 들었어요, 다시 말해볼까요?' 같은 안내를 주세요.\\n\\n아래 JSON 형식으로만 응답하세요 (다른 설명 없이):\\n{\"correct\": true 또는 false, \"score\": 0~100 사이 정수, \"feedback_ko\": \"20자 내외 한국어 피드백 한 문장\", \"pronunciation_tip\": \"발음 팁 또는 빈 문자열\"}` } ] } ] }) }}",
         "options": {}
       },
-      "id": "gemini_grade",
+      "id": "ca53d7d7-826d-45cd-89e9-e80cb2933e70",
       "name": "Gemini: 채점",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [450, 620],
+      "position": [
+        717952,
+        534816
+      ],
       "notesInFlow": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "DVT2g7GvXhSY4Y4b",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
       "notes": "Google AI Studio에서 발급한 Gemini API 키를 credentials 또는 URL의 key 쿼리파라미터에 연결하세요."
     },
     {
       "parameters": {
         "jsCode": "const raw = $input.first().json;\nlet parsed = { correct: false, score: 0, feedback_ko: '', pronunciation_tip: '' };\ntry {\n  let text = raw.candidates[0].content.parts[0].text.trim();\n  text = text.replace(/```json|```/g, '').trim();\n  parsed = JSON.parse(text);\n} catch (e) {}\n\nconst body = $('3. POST 답변 채점 Webhook').first().json.body;\nconst phase = body.phase || '복습'; // '신규' | '복습'\nconst correct = !!parsed.correct;\nconst score = Number(parsed.score) || 0;\n\nconst result = {\n  card_id: body.card_id,\n  phase,\n  correct,\n  score,\n  feedback_ko: parsed.feedback_ko || (correct ? '정답이에요!' : '아쉬워요, 다시 확인해봐요.'),\n  pronunciation_tip: parsed.pronunciation_tip || '',\n  user_answer: body.user_answer || ''\n};\n\nif (phase === '복습') {\n  const ease = Number(body.ease_factor) || 2.5;\n  const interval = Number(body.interval_days) || 1;\n  const timesReviewed = Number(body.times_reviewed) || 0;\n\n  // score -> SM-2 quality(0~5) 대략 매핑\n  const q = score >= 90 ? 5 : score >= 75 ? 4 : score >= 60 ? 3 : score >= 40 ? 2 : score >= 20 ? 1 : 0;\n  let newEase = ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));\n  newEase = Math.max(1.3, Math.round(newEase * 100) / 100);\n\n  let newInterval, nextReviewDate;\n  const today = new Date();\n  if (q < 3) {\n    // 오답(랩스): 짧게 다시 — 다음 복습 세션에 바로 재등장\n    newInterval = 1;\n    nextReviewDate = today.toISOString().slice(0, 10);\n  } else {\n    newInterval = timesReviewed === 0 ? 1 : Math.round(interval * newEase);\n    const next = new Date(today);\n    next.setDate(next.getDate() + newInterval);\n    nextReviewDate = next.toISOString().slice(0, 10);\n  }\n\n  result.new_ease_factor = newEase;\n  result.new_interval_days = newInterval;\n  result.new_next_review_date = nextReviewDate;\n  result.new_times_reviewed = timesReviewed + 1;\n  result.new_last_result = correct ? '정답' : '오답';\n}\n\nreturn [{ json: result }];"
       },
-      "id": "code_grade_calc",
+      "id": "31a1ec25-66bd-4b3b-a5b6-bbba644f7421",
       "name": "채점 파싱 + SM-2 계산",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 620]
+      "position": [
+        718208,
+        534816
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [ { "leftValue": "={{ $json.phase }}", "rightValue": "복습", "operator": { "type": "string", "operation": "equals" } } ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.phase }}",
+              "rightValue": "복습",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
           "combinator": "and"
         },
         "options": {}
       },
-      "id": "if_review_phase",
+      "id": "0ab251e1-22e8-4b63-bbc0-ffc3e710ed2d",
       "name": "IF: 복습 단계인가?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [950, 520]
+      "position": [
+        718448,
+        534720
+      ]
     },
     {
       "parameters": {
         "operation": "update",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "카드", "mode": "name" },
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
@@ -156,18 +261,32 @@
         },
         "options": {}
       },
-      "id": "at_review_update",
+      "id": "2eade5ca-8f3f-460f-aa68-fdb935cbb5f4",
       "name": "Airtable: SM-2 스케줄 갱신",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [1200, 480],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        718704,
+        534672
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "create",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "복습기록", "mode": "name" },
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "복습기록",
+          "mode": "name"
+        },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
@@ -184,41 +303,66 @@
         },
         "options": {}
       },
-      "id": "at_review_log",
+      "id": "18e6ae6c-ab9d-43cc-b1e5-00d478ae1927",
       "name": "Airtable: 복습기록 생성",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [950, 720],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        718448,
+        535040
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { correct: $json.correct, score: $json.score, feedback_ko: $json.feedback_ko, pronunciation_tip: $json.pronunciation_tip, new_ease_factor: $json.new_ease_factor, new_interval_days: $json.new_interval_days, new_next_review_date: $json.new_next_review_date, new_times_reviewed: $json.new_times_reviewed } }}"
+        "responseBody": "={{ { correct: $json.correct, score: $json.score, feedback_ko: $json.feedback_ko, pronunciation_tip: $json.pronunciation_tip, new_ease_factor: $json.new_ease_factor, new_interval_days: $json.new_interval_days, new_next_review_date: $json.new_next_review_date, new_times_reviewed: $json.new_times_reviewed } }}",
+        "options": {}
       },
-      "id": "resp_grade",
+      "id": "90f8f840-e5bb-450d-86b3-b53045ea5726",
       "name": "응답 (채점)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [950, 620],
+      "position": [
+        718448,
+        534864
+      ],
       "notesInFlow": true,
       "notes": "Airtable 기록(위/아래 브랜치)을 기다리지 않고 code_grade_calc 결과로 바로 응답 — 음성모드 흐름이 끊기지 않게."
     },
-
     {
-      "parameters": { "httpMethod": "POST", "path": "repeat-study-graduate", "responseMode": "responseNode", "options": {} },
-      "id": "wh_graduate",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "repeat-study-graduate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "421de317-a733-460d-842b-1da1d1a61721",
       "name": "4. POST 신규카드 졸업 Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 900],
+      "position": [
+        717696,
+        535088
+      ],
       "webhookId": "repeat-study-graduate"
     },
     {
       "parameters": {
         "operation": "update",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "카드", "mode": "name" },
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
@@ -233,148 +377,240 @@
         },
         "options": {}
       },
-      "id": "at_graduate_update",
+      "id": "880275b7-04d5-4130-abd6-4535594e5e17",
       "name": "Airtable: 신규→복습 전환",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [450, 900],
+      "position": [
+        717952,
+        535088
+      ],
       "notesInFlow": true,
-      "notes": "졸업 즉시 다음복습일을 '오늘'로 둬서, 그날 저녁 복습 세션에 바로 나타나게 합니다 (오늘꺼+예전꺼를 섞어서 복습하고 싶다는 요청 반영).",
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      },
+      "notes": "졸업 즉시 다음복습일을 '오늘'로 둬서, 그날 저녁 복습 세션에 바로 나타나게 합니다 (오늘꺼+예전꺼를 섞어서 복습하고 싶다는 요청 반영)."
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ { ok: true } }}" },
-      "id": "resp_graduate",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true } }}",
+        "options": {}
+      },
+      "id": "f8c68cf3-0468-4e64-b72b-c206c23c2a28",
       "name": "응답 (졸업)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [700, 900]
+      "position": [
+        718208,
+        535088
+      ]
     },
-
     {
-      "parameters": { "httpMethod": "GET", "path": "repeat-study-materials-get", "responseMode": "responseNode", "options": {} },
-      "id": "wh_materials_get",
+      "parameters": {
+        "path": "repeat-study-materials-get",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "caa512db-f77d-4c3a-bb04-a134b522a9b3",
       "name": "5. GET 자료별 통계 조회 Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 1150],
+      "position": [
+        717696,
+        535344
+      ],
       "webhookId": "repeat-study-materials-get"
     },
     {
       "parameters": {
-        "operation": "list",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "학습자료", "mode": "name" },
-        "returnAll": true,
+        "operation": "search",
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "학습자료",
+          "mode": "name"
+        },
         "options": {}
       },
-      "id": "at_materials_list",
+      "id": "8f8b4cc3-cda8-40d6-8e80-7b34f894fd6c",
       "name": "Airtable: 학습자료 전체 조회",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [450, 1050],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        717952,
+        535248
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
       "parameters": {
-        "operation": "list",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "카드", "mode": "name" },
-        "returnAll": true,
+        "operation": "search",
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "복습기록",
+          "mode": "name"
+        },
         "options": {}
       },
-      "id": "at_cards_list_for_stats",
-      "name": "Airtable: 카드 전체 조회",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [450, 1150],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
-    },
-    {
-      "parameters": {
-        "operation": "list",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "복습기록", "mode": "name" },
-        "returnAll": true,
-        "options": { "sort": { "property": [ { "field": "일시", "direction": "desc" } ] } }
-      },
-      "id": "at_reviews_list_for_stats",
+      "id": "509e1adc-9734-43ea-b614-d8a15a062826",
       "name": "Airtable: 복습기록 전체 조회",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [450, 1250],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        717952,
+        535440
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
-      "parameters": { "mode": "combine", "combineBy": "combineAll", "options": {} },
-      "id": "merge_stats",
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "120ee56e-9208-4aac-bd8e-2d9f1089c776",
       "name": "Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [700, 1150]
+      "position": [
+        718208,
+        535344
+      ]
     },
     {
       "parameters": {
         "jsCode": "const materials = $('Airtable: 학습자료 전체 조회').all();\nconst cards = $('Airtable: 카드 전체 조회').all();\nconst reviews = $('Airtable: 복습기록 전체 조회').all();\n\nconst lastReviewByCardId = {};\nreviews.forEach(r => {\n  const cid = r.json.카드ID;\n  if (cid && !lastReviewByCardId[cid]) lastReviewByCardId[cid] = r.json.일시; // 이미 일시 내림차순 정렬됨\n});\n\nconst result = materials.map(m => {\n  const myCards = cards.filter(c => (c.json.자료 || []).includes(m.id));\n  const cardIds = myCards.map(c => c.id);\n  const totalReviews = myCards.reduce((sum, c) => sum + (c.json.복습횟수 || 0), 0);\n  let lastReviewed = null;\n  cardIds.forEach(cid => {\n    const d = lastReviewByCardId[cid];\n    if (d && (!lastReviewed || d > lastReviewed)) lastReviewed = d;\n  });\n  return {\n    material_id: m.id,\n    title: m.json.제목,\n    card_count: myCards.length,\n    new_count: myCards.filter(c => c.json.단계 === '신규').length,\n    total_reviews: totalReviews,\n    last_reviewed_date: lastReviewed ? lastReviewed.slice(0, 10) : null\n  };\n});\n\nreturn [{ json: { materials: result } }];"
       },
-      "id": "code_stats",
+      "id": "d7c7a4b5-a07c-49dd-b9a1-966750e7918c",
       "name": "자료별 통계 집계",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [950, 1150]
+      "position": [
+        718448,
+        535344
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ $json }}" },
-      "id": "resp_materials",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "9acb07a6-4c7b-4e7c-bfb5-192a1ccb85b2",
       "name": "응답 (자료통계)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1200, 1150]
+      "position": [
+        718704,
+        535344
+      ]
     },
-
     {
-      "parameters": { "httpMethod": "POST", "path": "repeat-study-card-update", "responseMode": "responseNode", "options": {} },
-      "id": "wh_card_update",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "repeat-study-card-update",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "cd553d9f-28e8-4493-8175-f3ddf7cfc506",
       "name": "6. POST 카드 수정/삭제 Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 1420],
+      "position": [
+        717696,
+        535616
+      ],
       "webhookId": "repeat-study-card-update"
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [ { "leftValue": "={{ $json.body.action }}", "rightValue": "delete", "operator": { "type": "string", "operation": "equals" } } ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "delete",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
           "combinator": "and"
         },
         "options": {}
       },
-      "id": "if_delete",
+      "id": "89bad01d-a6e7-45a1-b631-0d2a484f6586",
       "name": "IF: 삭제 요청인가?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [450, 1420]
+      "position": [
+        717952,
+        535616
+      ]
     },
     {
       "parameters": {
         "operation": "delete",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "카드", "mode": "name" },
-        "id": "={{ $json.body.id }}"
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        }
       },
-      "id": "at_card_delete",
+      "id": "ae49caa8-1580-4a73-b64e-7247b57cbb8b",
       "name": "Airtable: 카드 삭제",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [700, 1350],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        718208,
+        535552
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "update",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "카드", "mode": "name" },
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
@@ -386,130 +622,470 @@
         },
         "options": {}
       },
-      "id": "at_card_edit",
+      "id": "9c8e987b-372a-478e-9160-cb369aec2dc8",
       "name": "Airtable: 카드 내용 수정",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [700, 1480],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        718208,
+        535680
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
-      "parameters": { "mode": "chooseBranch", "output": "input1", "options": {} },
-      "id": "merge_card_update",
+      "parameters": {
+        "mode": "chooseBranch",
+        "output": "input1"
+      },
+      "id": "35e68bf3-a78f-46f7-9513-4caae5f34dfd",
       "name": "Merge (수정/삭제 결과 합치기)",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [950, 1420]
+      "position": [
+        718448,
+        535616
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ { ok: true } }}" },
-      "id": "resp_card_update",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true } }}",
+        "options": {}
+      },
+      "id": "980fc3d7-443e-4296-b8d9-89d5a5ecf680",
       "name": "응답 (카드수정)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1200, 1420]
+      "position": [
+        718704,
+        535616
+      ]
     },
-
     {
-      "parameters": { "httpMethod": "GET", "path": "repeat-study-cards-get", "responseMode": "responseNode", "options": {} },
-      "id": "wh_cards_get",
+      "parameters": {
+        "path": "repeat-study-cards-get",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b042e946-ad8b-411d-8a51-91d9c0e2ec87",
       "name": "7. GET 전체 카드 조회 Webhook (화면모드 체크용)",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 1650],
+      "position": [
+        717696,
+        535840
+      ],
       "webhookId": "repeat-study-cards-get",
       "notesInFlow": true,
       "notes": "단계/활성 여부 상관없이 전부 반환. 화면모드에서 자료별로 묶어 확인/수정할 때 씀. 개인용 소규모 데이터라 서버 필터 없이 통째로 내려주고 클라이언트에서 그룹핑."
     },
     {
       "parameters": {
-        "operation": "list",
-        "base": { "value": "appnIQ0eb9IPrQGCt", "mode": "id" },
-        "table": { "value": "카드", "mode": "name" },
-        "returnAll": true,
+        "operation": "search",
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        },
         "options": {}
       },
-      "id": "at_cards_get_all",
+      "id": "3b65ad83-72ce-4072-b7f5-eba109ce1de1",
       "name": "Airtable: 전체 카드 조회",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [450, 1650],
-      "credentials": { "airtableTokenApi": { "id": "PLACEHOLDER", "name": "Airtable Personal Access Token account 2" } }
+      "position": [
+        717952,
+        535840
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     },
     {
       "parameters": {
         "jsCode": "const cards = $input.all().map(i => ({\n  id: i.json.id,\n  material_id: (i.json.자료 && i.json.자료[0]) || null,\n  material_title: (i.json.자료명 && i.json.자료명[0]) || '',\n  question: i.json.질문,\n  model_answer: i.json.모범답안,\n  hint: i.json.힌트 || '',\n  card_type: i.json.유형,\n  stage: i.json.단계,\n  active: !!i.json.활성,\n  ease_factor: i.json.이지팩터,\n  interval_days: i.json.간격일수,\n  next_review_date: i.json.다음복습일,\n  times_reviewed: i.json.복습횟수 || 0,\n  last_result: i.json.최근결과\n}));\nreturn [{ json: { cards } }];"
       },
-      "id": "code_cards_get_map",
+      "id": "d202c113-fc59-4061-88a7-ffbc3409bdd8",
       "name": "전체 카드 정리",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 1650]
+      "position": [
+        718208,
+        535840
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ $json }}" },
-      "id": "resp_cards_get",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "247a5c96-719b-4955-a1b9-88135d7fe45c",
       "name": "응답 (전체카드조회)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [950, 1650]
+      "position": [
+        718448,
+        535840
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "64c326fb-ffa2-4a03-8a56-84a727b2b9d7",
+      "name": "Airtable: 카드 전체 조회",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        717008,
+        535888
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
     }
   ],
+  "pinData": {},
   "connections": {
-    "1. GET 신규카드 조회 Webhook": { "main": [ [ { "node": "Airtable: 신규 카드 조회", "type": "main", "index": 0 } ] ] },
-    "Airtable: 신규 카드 조회": { "main": [ [ { "node": "카드 목록 정리", "type": "main", "index": 0 } ] ] },
-    "카드 목록 정리": { "main": [ [ { "node": "응답 (신규조회)", "type": "main", "index": 0 } ] ] },
-
-    "2. GET 복습카드 조회 Webhook": { "main": [ [ { "node": "Airtable: 복습 대상 카드 조회", "type": "main", "index": 0 } ] ] },
-    "Airtable: 복습 대상 카드 조회": { "main": [ [ { "node": "카드 목록 정리+셔플", "type": "main", "index": 0 } ] ] },
-    "카드 목록 정리+셔플": { "main": [ [ { "node": "응답 (복습조회)", "type": "main", "index": 0 } ] ] },
-
-    "3. POST 답변 채점 Webhook": { "main": [ [ { "node": "Gemini: 채점", "type": "main", "index": 0 } ] ] },
-    "Gemini: 채점": { "main": [ [ { "node": "채점 파싱 + SM-2 계산", "type": "main", "index": 0 } ] ] },
+    "1. GET 신규카드 조회 Webhook": {
+      "main": [
+        [
+          {
+            "node": "Airtable: 신규 카드 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: 신규 카드 조회": {
+      "main": [
+        [
+          {
+            "node": "카드 목록 정리",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "카드 목록 정리": {
+      "main": [
+        [
+          {
+            "node": "응답 (신규조회)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. GET 복습카드 조회 Webhook": {
+      "main": [
+        [
+          {
+            "node": "Airtable: 복습 대상 카드 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: 복습 대상 카드 조회": {
+      "main": [
+        [
+          {
+            "node": "카드 목록 정리+셔플",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "카드 목록 정리+셔플": {
+      "main": [
+        [
+          {
+            "node": "응답 (복습조회)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. POST 답변 채점 Webhook": {
+      "main": [
+        [
+          {
+            "node": "Gemini: 채점",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: 채점": {
+      "main": [
+        [
+          {
+            "node": "채점 파싱 + SM-2 계산",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "채점 파싱 + SM-2 계산": {
       "main": [
         [
-          { "node": "IF: 복습 단계인가?", "type": "main", "index": 0 },
-          { "node": "Airtable: 복습기록 생성", "type": "main", "index": 0 },
-          { "node": "응답 (채점)", "type": "main", "index": 0 }
+          {
+            "node": "IF: 복습 단계인가?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Airtable: 복습기록 생성",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "응답 (채점)",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
-    "IF: 복습 단계인가?": { "main": [ [ { "node": "Airtable: SM-2 스케줄 갱신", "type": "main", "index": 0 } ], [] ] },
-
-    "4. POST 신규카드 졸업 Webhook": { "main": [ [ { "node": "Airtable: 신규→복습 전환", "type": "main", "index": 0 } ] ] },
-    "Airtable: 신규→복습 전환": { "main": [ [ { "node": "응답 (졸업)", "type": "main", "index": 0 } ] ] },
-
+    "IF: 복습 단계인가?": {
+      "main": [
+        [
+          {
+            "node": "Airtable: SM-2 스케줄 갱신",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. POST 신규카드 졸업 Webhook": {
+      "main": [
+        [
+          {
+            "node": "Airtable: 신규→복습 전환",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: 신규→복습 전환": {
+      "main": [
+        [
+          {
+            "node": "응답 (졸업)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "5. GET 자료별 통계 조회 Webhook": {
       "main": [
         [
-          { "node": "Airtable: 학습자료 전체 조회", "type": "main", "index": 0 },
-          { "node": "Airtable: 카드 전체 조회", "type": "main", "index": 0 },
-          { "node": "Airtable: 복습기록 전체 조회", "type": "main", "index": 0 }
+          {
+            "node": "Airtable: 학습자료 전체 조회",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Airtable: 복습기록 전체 조회",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Airtable: 카드 전체 조회",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
-    "Airtable: 학습자료 전체 조회": { "main": [ [ { "node": "Merge", "type": "main", "index": 0 } ] ] },
-    "Airtable: 카드 전체 조회": { "main": [ [ { "node": "Merge", "type": "main", "index": 1 } ] ] },
-    "Airtable: 복습기록 전체 조회": { "main": [ [ { "node": "Merge", "type": "main", "index": 2 } ] ] },
-    "Merge": { "main": [ [ { "node": "자료별 통계 집계", "type": "main", "index": 0 } ] ] },
-    "자료별 통계 집계": { "main": [ [ { "node": "응답 (자료통계)", "type": "main", "index": 0 } ] ] },
-
-    "6. POST 카드 수정/삭제 Webhook": { "main": [ [ { "node": "IF: 삭제 요청인가?", "type": "main", "index": 0 } ] ] },
-    "IF: 삭제 요청인가?": {
+    "Airtable: 학습자료 전체 조회": {
       "main": [
-        [ { "node": "Airtable: 카드 삭제", "type": "main", "index": 0 } ],
-        [ { "node": "Airtable: 카드 내용 수정", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Airtable: 카드 삭제": { "main": [ [ { "node": "Merge (수정/삭제 결과 합치기)", "type": "main", "index": 0 } ] ] },
-    "Airtable: 카드 내용 수정": { "main": [ [ { "node": "Merge (수정/삭제 결과 합치기)", "type": "main", "index": 1 } ] ] },
-    "Merge (수정/삭제 결과 합치기)": { "main": [ [ { "node": "응답 (카드수정)", "type": "main", "index": 0 } ] ] },
-
-    "7. GET 전체 카드 조회 Webhook (화면모드 체크용)": { "main": [ [ { "node": "Airtable: 전체 카드 조회", "type": "main", "index": 0 } ] ] },
-    "Airtable: 전체 카드 조회": { "main": [ [ { "node": "전체 카드 정리", "type": "main", "index": 0 } ] ] },
-    "전체 카드 정리": { "main": [ [ { "node": "응답 (전체카드조회)", "type": "main", "index": 0 } ] ] }
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "자료별 통계 집계",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "자료별 통계 집계": {
+      "main": [
+        [
+          {
+            "node": "응답 (자료통계)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. POST 카드 수정/삭제 Webhook": {
+      "main": [
+        [
+          {
+            "node": "IF: 삭제 요청인가?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: 삭제 요청인가?": {
+      "main": [
+        [
+          {
+            "node": "Airtable: 카드 삭제",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: 카드 내용 수정",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: 카드 삭제": {
+      "main": [
+        [
+          {
+            "node": "Merge (수정/삭제 결과 합치기)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: 카드 내용 수정": {
+      "main": [
+        [
+          {
+            "node": "Merge (수정/삭제 결과 합치기)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge (수정/삭제 결과 합치기)": {
+      "main": [
+        [
+          {
+            "node": "응답 (카드수정)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. GET 전체 카드 조회 Webhook (화면모드 체크용)": {
+      "main": [
+        [
+          {
+            "node": "Airtable: 전체 카드 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: 전체 카드 조회": {
+      "main": [
+        [
+          {
+            "node": "전체 카드 정리",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "전체 카드 정리": {
+      "main": [
+        [
+          {
+            "node": "응답 (전체카드조회)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: 카드 전체 조회": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
   },
-  "active": false,
-  "settings": { "executionOrder": "v1" }
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9b522d47-67ff-471a-a244-01f192703195",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1faa7529d9407106b21db78adaeb6df5c966e643d4badc710ddad6189099423b"
+  },
+  "nodeGroups": [],
+  "id": "zW3mcyJHSjFFDuET",
+  "tags": []
 }

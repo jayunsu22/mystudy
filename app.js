@@ -9,8 +9,11 @@ const CONFIG = {
   GRADUATE_PATH: '/repeat-study-graduate',
   MATERIALS_GET_PATH: '/repeat-study-materials-get',
   MAX_NEW_PER_SESSION: 8,
-  ANSWER_TIMEOUT_MS: 8000
+  ANSWER_TIMEOUT_MS: 8000,
+  DRILL_WAIT_MS: 10000 // 3번 듣고 따라하기 + 2번 회상하기, 각 스텝마다 조용히 기다리는 시간(마이크 안 켬)
 };
+// Gemini 채점(GRADE_PATH)은 지금 드릴에서 호출을 잠시 막아뒀습니다 — 운전 중 소음 때문에 인식/채점이 잘 안 돼서.
+// 관련 코드(callWebhook(GRADE_PATH,...), buildGradePayload, teachAndPrompt/confirmAdvance)는 나중에 다시 쓸 수 있게 지우지 않고 남겨둠.
 
 /* ============ fetch 공통 유틸 (나의취향/품질관리 프로젝트와 동일 패턴) ============ */
 function showToast(message, type) {
@@ -66,6 +69,7 @@ let speechRate = parseFloat(localStorage.getItem('repeatStudySpeechRate')) || 0.
 let isPaused = false;
 let pendingResumeListen = false;
 let repeatRequested = false; // "반복"/"이전대화" 버튼으로 강제 반복 요청 시 true — speak()/listenOnce()가 이걸 보고 즉시 넘어감
+let nextRequested = false; // "다음" 버튼으로 강제 진행 요청 시 true — 드릴/대기를 즉시 건너뛰고 다음 단계로
 let sessionStats = { correct: 0, total: 0, graduated: 0, materialTitles: new Set() };
 let learningQueue = [];
 let reviewQueue = [];
@@ -108,7 +112,7 @@ const el = {
 /* ============ 말하기/듣기 유틸 ============ */
 function speak(text, lang, onend) {
   return new Promise((resolve) => {
-    if (repeatRequested) { onend && onend(); resolve(); return; } // 반복 요청 시 남은 안내 문구는 건너뜀
+    if (repeatRequested || nextRequested) { onend && onend(); resolve(); return; } // 반복/다음 요청 시 남은 안내 문구는 건너뜀
     if (!synth) { onend && onend(); resolve(); return; }
     if (synth.paused) synth.resume(); // 일시정지 상태로 남아있으면 cancel()해도 새 발화가 밀릴 수 있음
     const u = new SpeechSynthesisUtterance(text);
@@ -156,6 +160,7 @@ function clearListenTimer() {
 function listenOnce(lang, timeoutMs) {
   return new Promise((resolve) => {
     if (repeatRequested) { repeatRequested = false; resolve({ text: '반복', error: null }); return; }
+    if (nextRequested) { nextRequested = false; resolve({ text: '다음', error: null }); return; }
     if (!recognition) { resolve({ text: '', error: 'no-speech-api' }); return; }
     let done = false;
     recognition.lang = lang || 'ko-KR';
@@ -174,6 +179,7 @@ function listenOnce(lang, timeoutMs) {
       recognition.onend = null;
       recognizing = false;
       if (repeatRequested) { repeatRequested = false; result = { text: '반복', error: null }; }
+      else if (nextRequested) { nextRequested = false; result = { text: '다음', error: null }; }
       resolve(result);
     };
 
@@ -210,7 +216,7 @@ function listenOnce(lang, timeoutMs) {
 function matchCommand(text) {
   const t = (text || '').toLowerCase();
   if (/그만|정지|멈춰|종료|stop|quit|exit/.test(t)) return 'STOP';
-  if (/반복|다시|again|repeat/.test(t)) return 'REPEAT';
+  if (/반복|다시|again|repeat|지금/.test(t)) return 'REPEAT';
   if (/다음|next|skip|모르겠|패스|넘어가/.test(t)) return 'NEXT';
   return null;
 }
@@ -239,6 +245,66 @@ async function teachAndPrompt(card, introText) {
 
 async function confirmAdvance() {
   await speak('다음으로 넘어갈까요?', 'ko-KR');
+  renderStatus('listening');
+  const { text, error } = await listenOnce('ko-KR', CONFIG.ANSWER_TIMEOUT_MS);
+  dlog(`다음 확인 응답: "${text}"` + (error ? ` (에러: ${error})` : ''));
+  const cmd = matchCommand(text);
+  if (cmd === 'STOP') return 'STOP';
+  if (cmd === 'REPEAT') return 'REPEAT';
+  return 'NEXT';
+}
+
+/* 조용히 카운트다운만 하는 대기 — 마이크는 켜지 않는다(운전 중 소음으로 인식이 잘 안 돼서).
+   "반복"/"다음" 버튼이 눌리면(repeatRequested/nextRequested) 즉시 끝난다. 일시정지 중엔 카운트가 멈춘다. */
+function countdownWait(ms) {
+  const statusEl = document.getElementById('statusLine');
+  let remain = ms;
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (repeatRequested || nextRequested) { resolve(); return; }
+      if (isPaused) { waitTimer = setTimeout(tick, 250); return; }
+      if (statusEl) statusEl.querySelector('.status-text').textContent = `말해보세요... (${Math.max(0, Math.ceil(remain / 1000))}초)`;
+      remain -= 250;
+      if (remain <= 0) { resolve(); return; }
+      waitTimer = setTimeout(tick, 250);
+    };
+    tick();
+  });
+}
+
+/* 한 카드를 5단계로 연습: 영어 정답 3번 듣고 따라말하기 → 한국어 질문 2번 듣고 회상해서 답하기.
+   각 스텝 사이엔 마이크 없이 DRILL_WAIT_MS만큼 조용히 기다림(사용자가 알아서 따라말함, 채점 안 함).
+   "반복" 버튼이 눌리면 false를 반환(호출부가 같은 카드를 처음부터 다시 시작), "다음" 버튼이 눌리면
+   남은 스텝을 건너뛰고 true를 반환(nextRequested는 그대로 켜진 채로 다음 confirmAdvanceThreeWay에서 소비됨). */
+async function runCardDrill(card) {
+  const answerEl = document.getElementById('answerText');
+  if (answerEl) { answerEl.textContent = card.model_answer; answerEl.style.display = 'block'; }
+
+  const steps = [
+    { text: card.model_answer, lang: 'en-US' },
+    { text: card.model_answer, lang: 'en-US' },
+    { text: card.model_answer, lang: 'en-US' },
+    { text: card.question, lang: 'ko-KR' },
+    { text: card.question, lang: 'ko-KR' }
+  ];
+  for (const step of steps) {
+    renderStatus('speaking');
+    await speak(step.text, step.lang);
+    if (repeatRequested) { repeatRequested = false; return false; }
+    if (nextRequested) { return true; }
+    renderStatus('idle');
+    await countdownWait(CONFIG.DRILL_WAIT_MS);
+    if (repeatRequested) { repeatRequested = false; return false; }
+    if (nextRequested) { return true; }
+  }
+  return true;
+}
+
+/* 드릴이 끝난 뒤 "다음 문장으로 넘어가도 될까요?"를 묻고, 응답을 3지(다음문장/지금문장/연습종료)로 분류.
+   matchCommand()를 그대로 재사용 — "연습종료"는 이미 STOP 정규식의 "종료"에 걸리고,
+   "지금문장"은 REPEAT 정규식에 추가한 "지금"에 걸린다. */
+async function confirmAdvanceThreeWay() {
+  await speak('다음 문장으로 넘어가도 될까요?', 'ko-KR');
   renderStatus('listening');
   const { text, error } = await listenOnce('ko-KR', CONFIG.ANSWER_TIMEOUT_MS);
   dlog(`다음 확인 응답: "${text}"` + (error ? ` (에러: ${error})` : ''));
@@ -285,6 +351,7 @@ function goHome() {
   isPaused = false;
   pendingResumeListen = false;
   repeatRequested = false;
+  nextRequested = false;
   if (synth.paused) synth.resume(); // 일시정지 상태로 홈에 돌아가면 TTS 엔진이 계속 멈춰있지 않도록
   setPauseBtnLabel('⏸', '일시정지');
   if (el.btnPause) el.btnPause.classList.remove('paused');
@@ -360,74 +427,23 @@ async function runLearningLoop() {
     if (isIntroduce) item.introduced = true;
 
     let repeatThisCard = true;
-    let gradeFailCount = 0; // 이 카드에 한해 채점 실패 연속 횟수 — 카드가 바뀌면 초기화됨
     while (repeatThisCard) {
       repeatThisCard = false;
 
-      if (isIntroduce) {
-        renderLearningView(card, '처음 배우기');
-        renderStatus('speaking');
-        dlog(`신규 소개: ${card.question}`);
-        await teachAndPrompt(card, null);
-      } else {
-        renderLearningView(card, `재확인 ${item.stepIndex}/${SrsUtils.STEP_INTERVALS_MIN.length - 1}`);
-        renderStatus('speaking');
-        dlog(`신규 재확인: ${card.question}`);
-        await teachAndPrompt(card, '다시 확인할게요.');
-      }
+      renderLearningView(card, isIntroduce ? '처음 배우기' : `재확인 ${item.stepIndex}/${SrsUtils.STEP_INTERVALS_MIN.length - 1}`);
+      dlog(`${isIntroduce ? '신규 소개' : '신규 재확인'}: ${card.question}`);
 
-      renderStatus('listening');
-      const { text, error } = await listenOnce(answerLangFor(card), CONFIG.ANSWER_TIMEOUT_MS);
-      document.getElementById('heardText').textContent = text ? `내가 말한 것: "${text}"` : '(응답을 듣지 못했어요)';
-      dlog(`답변: "${text}"` + (error ? ` (에러: ${error})` : ''));
+      const completed = await runCardDrill(card);
+      if (!completed) { repeatThisCard = true; continue; } // "반복" 버튼 — 이 카드 드릴 처음부터 다시
 
-      const cmd = matchCommand(text);
-      if (cmd === 'STOP') { await speak('신규학습을 종료할게요.', 'ko-KR'); goHome(); return; }
-      if (cmd === 'REPEAT') { repeatThisCard = true; continue; }
-
-      let result;
-      try {
-        result = await callWebhook(CONFIG.GRADE_PATH, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(SrsUtils.buildGradePayload({ card, phase: '신규', mode: 'VOICE', userAnswer: text }))
-        });
-      } catch (e) {
-        gradeFailCount++;
-        if (gradeFailCount > 2) {
-          await speak('서버 연결이 불안정해요. 잠시 후 다시 시도해주세요.', 'ko-KR');
-          goHome();
-          return;
-        }
-        repeatThisCard = true;
-        continue;
-      }
-
-      sessionStats.total++;
-      if (result.correct) sessionStats.correct++;
-
-      const fbEl = document.getElementById('feedbackText');
-      fbEl.style.display = 'block';
-      fbEl.className = 'feedback ' + (result.correct ? 'correct' : 'incorrect');
-      fbEl.textContent = result.feedback_ko;
-      const pronEl = document.getElementById('pronTip');
-      if (result.pronunciation_tip) {
-        pronEl.style.display = 'block';
-        pronEl.textContent = `🗣️ ${result.pronunciation_tip}`;
-      } else {
-        pronEl.style.display = 'none';
-      }
-
-      renderStatus('speaking');
-      let feedbackToSpeak = result.feedback_ko;
-      if (result.pronunciation_tip) feedbackToSpeak += ` ${result.pronunciation_tip}`;
-      await speak(feedbackToSpeak, 'ko-KR');
-
-      const advance = await confirmAdvance();
+      const advance = await confirmAdvanceThreeWay();
       if (advance === 'STOP') { await speak('신규학습을 종료할게요.', 'ko-KR'); goHome(); return; }
       if (advance === 'REPEAT') { repeatThisCard = true; continue; }
 
-      SrsUtils.recordLearningResult(item, !!result.correct, Date.now());
+      // 채점을 안 하므로 항상 통과로 집계 — 드릴을 끝까지 마쳤다는 것 자체를 진행으로 침
+      sessionStats.total++;
+      sessionStats.correct++;
+      SrsUtils.recordLearningResult(item, true, Date.now());
       if (item.graduated) {
         sessionStats.graduated++;
         dlog(`졸업: ${card.question}`);
@@ -487,65 +503,21 @@ async function runReviewLoop() {
     if (card.material_title) sessionStats.materialTitles.add(card.material_title);
 
     let repeatThisCard = true;
-    let gradeFailCount = 0; // 이 카드에 한해 채점 실패 연속 횟수 — 카드가 바뀌면 초기화됨
     while (repeatThisCard) {
       repeatThisCard = false;
       renderReviewView(card);
-      renderStatus('speaking');
-      dlog(`복습 질문 (${reviewIndex + 1}/${reviewQueue.length}): ${card.question}`);
-      await teachAndPrompt(card, null);
+      dlog(`복습 (${reviewIndex + 1}/${reviewQueue.length}): ${card.question}`);
 
-      renderStatus('listening');
-      const { text, error } = await listenOnce(answerLangFor(card), CONFIG.ANSWER_TIMEOUT_MS);
-      document.getElementById('heardText').textContent = text ? `내가 말한 것: "${text}"` : '(응답을 듣지 못했어요)';
-      dlog(`답변: "${text}"` + (error ? ` (에러: ${error})` : ''));
+      const completed = await runCardDrill(card);
+      if (!completed) { repeatThisCard = true; continue; } // "반복" 버튼 — 이 카드 드릴 처음부터 다시
 
-      const cmd = matchCommand(text);
-      if (cmd === 'STOP') { await speak('복습을 종료할게요. 안전 운전하세요.', 'ko-KR'); await finishReview(); return; }
-      if (cmd === 'REPEAT') { repeatThisCard = true; continue; }
-      if (cmd === 'NEXT') { break; }
-
-      let result;
-      try {
-        result = await callWebhook(CONFIG.GRADE_PATH, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(SrsUtils.buildGradePayload({ card, phase: '복습', mode: 'VOICE', userAnswer: text }))
-        });
-      } catch (e) {
-        gradeFailCount++;
-        if (gradeFailCount > 2) {
-          await speak('서버 연결이 불안정해요. 잠시 후 다시 시도해주세요.', 'ko-KR');
-          await finishReview();
-          return;
-        }
-        repeatThisCard = true;
-        continue;
-      }
-
-      sessionStats.total++;
-      if (result.correct) sessionStats.correct++;
-
-      const fbEl = document.getElementById('feedbackText');
-      fbEl.style.display = 'block';
-      fbEl.className = 'feedback ' + (result.correct ? 'correct' : 'incorrect');
-      fbEl.textContent = result.feedback_ko;
-      const pronEl = document.getElementById('pronTip');
-      if (result.pronunciation_tip) {
-        pronEl.style.display = 'block';
-        pronEl.textContent = `🗣️ ${result.pronunciation_tip}`;
-      } else {
-        pronEl.style.display = 'none';
-      }
-
-      renderStatus('speaking');
-      let feedbackToSpeak = result.feedback_ko;
-      if (result.pronunciation_tip) feedbackToSpeak += ` ${result.pronunciation_tip}`;
-      await speak(feedbackToSpeak, 'ko-KR');
-
-      const advance = await confirmAdvance();
+      const advance = await confirmAdvanceThreeWay();
       if (advance === 'STOP') { await speak('복습을 종료할게요. 안전 운전하세요.', 'ko-KR'); await finishReview(); return; }
       if (advance === 'REPEAT') { repeatThisCard = true; continue; }
+
+      // 채점을 안 하므로 항상 통과로 집계 — 서버 SM-2 스케줄은 GRADE_PATH를 안 불러서 갱신되지 않음(알려진 제약)
+      sessionStats.total++;
+      sessionStats.correct++;
     }
     reviewIndex++;
   }
@@ -553,7 +525,7 @@ async function runReviewLoop() {
 }
 
 async function finishReview() {
-  let summary = `오늘 복습 ${sessionStats.total}개 중 ${sessionStats.correct}개 맞혔어요.`;
+  let summary = `오늘 복습 ${sessionStats.total}개 연습했어요.`;
   try {
     const materialsData = await callWebhook(CONFIG.MATERIALS_GET_PATH, { method: 'GET' });
     const touched = (materialsData.materials || []).filter(m => sessionStats.materialTitles.has(m.title));
@@ -583,17 +555,27 @@ el.startReviewBtn.addEventListener('click', () => {
   if (!SR) { alert('이 브라우저는 음성인식을 지원하지 않아요. Android Chrome을 사용해주세요.'); }
   reviewFlow();
 });
+function interruptCurrentStep() {
+  if (synth && synth.speaking) synth.cancel(); // 지금 말하던 안내는 여기서 끊기고, 이후 speak() 호출들은 전부 건너뜀
+  if (recognizing) {
+    try { recognition.abort(); } catch (e) {} // 듣던 중이면 종료시켜서 finish()가 바로 넘겨받게 함
+  }
+}
 function triggerRepeat() {
   if (mode === 'HOME') return;
   repeatRequested = true;
-  if (synth && synth.speaking) synth.cancel(); // 지금 말하던 안내는 여기서 끊기고, 이후 speak() 호출들은 전부 건너뜀
-  if (recognizing) {
-    try { recognition.abort(); } catch (e) {} // 듣던 중이면 종료시켜서 finish()가 '반복'으로 바로 넘겨받게 함
-  }
+  nextRequested = false; // 반복이 우선
+  interruptCurrentStep();
+}
+function triggerNext() {
+  if (mode === 'HOME') return;
+  nextRequested = true;
+  repeatRequested = false; // 다음이 우선
+  interruptCurrentStep();
 }
 el.btnRepeat.addEventListener('click', triggerRepeat);
 el.btnPrevTurn.addEventListener('click', triggerRepeat); // "이전대화" = 직전 자리(같은 카드)를 처음부터 다시 듣기
-el.btnNext.addEventListener('click', () => { if (mode === 'REVIEW') reviewIndex++; });
+el.btnNext.addEventListener('click', triggerNext);
 el.btnRefresh.addEventListener('click', () => { location.reload(); });
 el.btnHome.addEventListener('click', () => { goHome(); });
 el.btnPause.addEventListener('click', () => {
