@@ -132,7 +132,8 @@ function speak(text, lang, onend) {
     if (synth.paused) synth.resume(); // 일시정지 상태로 남아있으면 cancel()해도 새 발화가 밀릴 수 있음
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang || 'ko-KR';
-    u.rate = u.lang.toLowerCase().startsWith('en') ? speechRate * ENGLISH_RATE_MULTIPLIER : speechRate;
+    // 배속 버튼은 영어 재생속도만 조정한다 — 한국어 안내는 항상 기본 속도(1.0)로 고정.
+    u.rate = u.lang.toLowerCase().startsWith('en') ? speechRate * ENGLISH_RATE_MULTIPLIER : 1.0;
     let settled = false;
     const finish = () => {
       if (settled) return;
@@ -146,7 +147,7 @@ function speak(text, lang, onend) {
     // 버튼을 빠르게 연타해서 cancel()+speak()가 짧은 간격으로 겹치면, 일부 모바일 브라우저의 TTS 엔진이
     // onend/onerror를 아예 쏘지 않고 멈춰버리는 경우가 있다("다음"을 연타했더니 문장 읽다가 멈춤 버그).
     // 글자 수 기반 최대 대기시간을 넘기면 강제로 다음 단계로 진행시켜 앱 전체가 멈추는 걸 방지한다.
-    const watchdogMs = Math.max(4000, text.length * 350) / (speechRate || 1);
+    const watchdogMs = Math.max(4000, text.length * 350) / (u.rate || 1); // 실제 재생 속도(u.rate) 기준으로 계산 — 한국어는 항상 1.0
     const watchdog = setTimeout(finish, watchdogMs);
     synth.cancel();
     synth.speak(u);
@@ -370,9 +371,11 @@ function answerLangFor(card) {
 }
 
 function rateButtonsHtml() {
-  return `<div class="rate-row">${RATE_OPTIONS.map(r =>
-    `<button class="rate-btn${r === speechRate ? ' active' : ''}" data-rate="${r}">${r}x</button>`
-  ).join('')}</div>`;
+  return `
+    <div class="small-note" style="margin-top:0;">영어 재생속도 (한국어 안내는 항상 기본속도)</div>
+    <div class="rate-row">${RATE_OPTIONS.map(r =>
+      `<button class="rate-btn${r === speechRate ? ' active' : ''}" data-rate="${r}">${r}x</button>`
+    ).join('')}</div>`;
 }
 
 /* ============ 홈 화면 (챕터 목록) ============ */
