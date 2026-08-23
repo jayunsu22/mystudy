@@ -66,6 +66,7 @@ function renderDebugPanel() {
 let mode = 'HOME'; // HOME | NEW | REVIEW
 let recognizing = false;
 const RATE_OPTIONS = [0.7, 0.85, 1.0, 1.15];
+const ENGLISH_RATE_MULTIPLIER = 0.7; // 영어 문장(정답)은 발음이 잘 들리도록 한국어 안내보다 항상 70% 속도로 재생
 let speechRate = parseFloat(localStorage.getItem('repeatStudySpeechRate')) || 0.85;
 let isPaused = false;
 let pendingResumeListen = false;
@@ -118,7 +119,7 @@ function speak(text, lang, onend) {
     if (synth.paused) synth.resume(); // 일시정지 상태로 남아있으면 cancel()해도 새 발화가 밀릴 수 있음
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang || 'ko-KR';
-    u.rate = speechRate;
+    u.rate = u.lang.toLowerCase().startsWith('en') ? speechRate * ENGLISH_RATE_MULTIPLIER : speechRate;
     u.onend = () => { onend && onend(); resolve(); };
     u.onerror = () => { onend && onend(); resolve(); };
     synth.cancel();
@@ -280,6 +281,15 @@ function countdownWait(ms) {
 async function runCardDrill(card) {
   const answerEl = document.getElementById('answerText');
   if (answerEl) { answerEl.textContent = card.model_answer; answerEl.style.display = 'block'; }
+
+  // 문장에 처음 진입할 때(또는 "반복"으로 처음부터 다시 시작할 때) 어떤 문장을 연습할지 먼저 안내.
+  // card.question은 보통 "'실제 문장'를 영어로?" 형태라 따옴표 안의 순수 문장만 뽑아서 들려준다.
+  const introMatch = /'([^']+)'/.exec(card.question || '');
+  const introSentence = introMatch ? introMatch[1] : (card.question || '');
+  renderStatus('speaking');
+  await speak(`이번 문장은 '${introSentence}' 입니다. 잘 듣고 따라해 주세요.`, 'ko-KR');
+  if (repeatRequested) { repeatRequested = false; return false; }
+  if (nextRequested) { return true; }
 
   const steps = [
     { text: card.model_answer, lang: 'en-US' },
