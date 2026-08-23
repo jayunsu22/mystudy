@@ -63,6 +63,8 @@ let mode = 'HOME'; // HOME | NEW | REVIEW
 let recognizing = false;
 const RATE_OPTIONS = [0.7, 0.85, 1.0, 1.15];
 let speechRate = parseFloat(localStorage.getItem('repeatStudySpeechRate')) || 0.85;
+let isPaused = false;
+let pendingResumeListen = false;
 let sessionStats = { correct: 0, total: 0, graduated: 0, materialTitles: new Set() };
 let learningQueue = [];
 let reviewQueue = [];
@@ -89,6 +91,7 @@ const el = {
   btnRepeat: document.getElementById('btnRepeat'),
   btnNext: document.getElementById('btnNext'),
   btnStop: document.getElementById('btnStop'),
+  btnPause: document.getElementById('btnPause'),
   voiceHint: document.getElementById('voiceHint'),
 };
 
@@ -135,7 +138,10 @@ function listenOnce(lang, timeoutMs) {
       }
     };
     recognition.onerror = (e) => finish({ text: '', error: e.error });
-    recognition.onend = () => finish({ text: '', error: 'ended' });
+    recognition.onend = () => {
+      if (isPaused) return; // 일시정지로 인한 중단 — 재개 시 recognition.start()로 이어감, 여기서 끝내지 않음
+      finish({ text: '', error: 'ended' });
+    };
 
     try {
       recognition.start();
@@ -165,9 +171,11 @@ function renderStatus(kind) {
   const statusEl = document.getElementById('statusLine');
   if (!statusEl) return;
   const dot = statusEl.querySelector('.status-dot');
-  dot.className = 'status-dot' + (kind === 'idle' ? '' : ' ' + kind);
+  dot.className = 'status-dot' + (kind === 'idle' || kind === 'paused' ? '' : ' ' + kind);
   statusEl.querySelector('.status-text').textContent =
-    kind === 'listening' ? '듣고 있어요...' : kind === 'speaking' ? '말하는 중...' : '대기 중';
+    kind === 'listening' ? '듣고 있어요...' :
+    kind === 'speaking' ? '말하는 중...' :
+    kind === 'paused' ? '일시정지됨' : '대기 중';
 }
 
 async function teachAndPrompt(card, introText) {
@@ -222,6 +230,9 @@ async function loadHomeCounts() {
 function goHome() {
   mode = 'HOME';
   clearTimeout(waitTimer);
+  isPaused = false;
+  pendingResumeListen = false;
+  if (el.btnPause) { el.btnPause.textContent = '⏸ 일시정지'; el.btnPause.classList.remove('paused'); }
   el.footer.style.display = 'none';
   el.voiceHint.style.display = 'none';
   el.card.innerHTML = '';
@@ -498,6 +509,33 @@ el.startReviewBtn.addEventListener('click', () => {
 });
 el.btnRepeat.addEventListener('click', () => { /* 다음 루프에서 같은 카드가 다시 나올 때 자연히 처리됨 */ });
 el.btnNext.addEventListener('click', () => { if (mode === 'REVIEW') reviewIndex++; });
+el.btnPause.addEventListener('click', () => {
+  if (!isPaused) {
+    isPaused = true;
+    if (synth.speaking) synth.pause();
+    if (recognizing) {
+      pendingResumeListen = true;
+      try { recognition.abort(); } catch (e) {}
+      recognizing = false;
+    }
+    el.btnPause.textContent = '▶ 계속';
+    el.btnPause.classList.add('paused');
+    renderStatus('paused');
+  } else {
+    isPaused = false;
+    el.btnPause.textContent = '⏸ 일시정지';
+    el.btnPause.classList.remove('paused');
+    if (synth.paused) synth.resume();
+    if (pendingResumeListen) {
+      pendingResumeListen = false;
+      try {
+        recognition.start();
+        recognizing = true;
+        renderStatus('listening');
+      } catch (e) {}
+    }
+  }
+});
 el.btnStop.addEventListener('click', async () => {
   await speak('세션을 종료할게요.', 'ko-KR');
   goHome();
