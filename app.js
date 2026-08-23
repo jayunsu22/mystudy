@@ -120,8 +120,21 @@ function speak(text, lang, onend) {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang || 'ko-KR';
     u.rate = u.lang.toLowerCase().startsWith('en') ? speechRate * ENGLISH_RATE_MULTIPLIER : speechRate;
-    u.onend = () => { onend && onend(); resolve(); };
-    u.onerror = () => { onend && onend(); resolve(); };
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      onend && onend();
+      resolve();
+    };
+    u.onend = finish;
+    u.onerror = finish;
+    // 버튼을 빠르게 연타해서 cancel()+speak()가 짧은 간격으로 겹치면, 일부 모바일 브라우저의 TTS 엔진이
+    // onend/onerror를 아예 쏘지 않고 멈춰버리는 경우가 있다("다음"을 연타했더니 문장 읽다가 멈춤 버그).
+    // 글자 수 기반 최대 대기시간을 넘기면 강제로 다음 단계로 진행시켜 앱 전체가 멈추는 걸 방지한다.
+    const watchdogMs = Math.max(4000, text.length * 350) / (speechRate || 1);
+    const watchdog = setTimeout(finish, watchdogMs);
     synth.cancel();
     synth.speak(u);
   });
@@ -279,6 +292,11 @@ function countdownWait(ms) {
    "반복" 버튼이 눌리면 false를 반환(호출부가 같은 카드를 처음부터 다시 시작), "다음" 버튼이 눌리면
    남은 스텝을 건너뛰고 true를 반환(nextRequested는 그대로 켜진 채로 다음 confirmAdvanceThreeWay에서 소비됨). */
 async function runCardDrill(card) {
+  // 새 문장(카드)에 들어올 때는 항상 깨끗한 상태에서 시작 — 직전 카드에서 버튼 연타 등으로
+  // repeatRequested/nextRequested가 남아있었더라도 여기서 확실히 초기화한다.
+  repeatRequested = false;
+  nextRequested = false;
+
   const answerEl = document.getElementById('answerText');
   if (answerEl) { answerEl.textContent = card.model_answer; answerEl.style.display = 'block'; }
 
@@ -584,12 +602,14 @@ function interruptCurrentStep() {
 }
 function triggerRepeat() {
   if (mode === 'HOME') return;
+  if (repeatRequested) return; // 이미 처리 중인 반복 요청이 있으면 연타 무시(중복 트리거로 흐름이 꼬이는 것 방지)
   repeatRequested = true;
   nextRequested = false; // 반복이 우선
   interruptCurrentStep();
 }
 function triggerNext() {
   if (mode === 'HOME') return;
+  if (nextRequested) return; // 이미 처리 중인 다음 요청이 있으면 연타 무시(중복 트리거로 흐름이 꼬이는 것 방지)
   nextRequested = true;
   repeatRequested = false; // 다음이 우선
   interruptCurrentStep();
