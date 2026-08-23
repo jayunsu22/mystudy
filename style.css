@@ -31,7 +31,7 @@ html,body{
 .phase-tag.new{ color:var(--accent2); background:#12331f; }
 .phase-tag.review{ color:var(--accent); background:#132038; }
 .subject-tag{ font-size:12px; color:var(--muted); }
-.question{ font-size:26px; font-weight:800; line-height:1.35; }
+.question{ font-size:15px; font-weight:600; line-height:1.4; color:var(--muted); }
 .hint{ font-size:14px; color:var(--accent2); }
 .heard{ font-size:15px; color:var(--text); background:#1c2740; padding:10px 16px; border-radius:12px; min-height:20px; width:100%; }
 .feedback{ font-size:16px; font-weight:700; padding:10px 16px; border-radius:12px; width:100%; }
@@ -66,7 +66,7 @@ html,body{
 }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 .toast.show.error{ border-color:#5c2a2a; background:#3a1c22; color:#ffb3b3; }
-.answer{ font-size:20px; font-weight:700; color:var(--accent); background:#132038; padding:10px 16px; border-radius:12px; width:100%; }
+.answer{ font-size:26px; font-weight:800; line-height:1.35; color:#ffffff; background:#132038; padding:14px 16px; border-radius:12px; width:100%; }
 .rate-row{ display:flex; gap:6px; justify-content:center; margin-bottom:4px; }
 .rate-btn{ background:#1c2740; color:var(--muted); border:1px solid #2a3a5c; border-radius:10px; padding:6px 10px; font-size:12px; cursor:pointer; }
 .rate-btn.active{ background:var(--accent); color:#04182b; border-color:var(--accent); font-weight:700; }
