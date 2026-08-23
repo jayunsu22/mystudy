@@ -1038,122 +1038,6 @@
     },
     {
       "parameters": {
-        "path": "repeat-study-chapters-get",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "b7c8d9e0-1111-4aaa-9bbb-500000000001",
-      "name": "9. GET 챕터 목록 조회 Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        717696,
-        537400
-      ],
-      "webhookId": "repeat-study-chapters-get"
-    },
-    {
-      "parameters": {
-        "operation": "search",
-        "base": {
-          "value": "appnIQ0eb9IPrQGCt",
-          "mode": "id"
-        },
-        "table": {
-          "value": "학습자료",
-          "mode": "name"
-        },
-        "options": {}
-      },
-      "id": "b7c8d9e0-1111-4aaa-9bbb-500000000002",
-      "name": "Airtable: 챕터용 학습자료 조회",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        717952,
-        537300
-      ],
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "J5wefJCMalpjjm3Q",
-          "name": "Airtable Personal Access Token account 2"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "search",
-        "base": {
-          "value": "appnIQ0eb9IPrQGCt",
-          "mode": "id"
-        },
-        "table": {
-          "value": "카드",
-          "mode": "name"
-        },
-        "filterByFormula": "{활성}=1",
-        "options": {}
-      },
-      "id": "b7c8d9e0-1111-4aaa-9bbb-500000000003",
-      "name": "Airtable: 챕터용 카드 조회",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        717952,
-        537500
-      ],
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "J5wefJCMalpjjm3Q",
-          "name": "Airtable Personal Access Token account 2"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "combineBy": "combineAll",
-        "options": {}
-      },
-      "id": "b7c8d9e0-1111-4aaa-9bbb-500000000004",
-      "name": "Merge (챕터목록)",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [
-        718208,
-        537400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const materials = $('Airtable: 챕터용 학습자료 조회').all();\nconst cards = $('Airtable: 챕터용 카드 조회').all();\n\nconst chapters = materials\n  .map(m => ({\n    id: m.id,\n    title: m.json.제목,\n    card_count: cards.filter(c => (c.json.자료 || []).includes(m.id)).length\n  }))\n  .filter(ch => ch.card_count > 0);\n\nchapters.sort((a, b) => a.title.localeCompare(b.title, 'ko'));\nreturn [{ json: { chapters } }];"
-      },
-      "id": "b7c8d9e0-1111-4aaa-9bbb-500000000005",
-      "name": "챕터 목록 정리",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        718448,
-        537400
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {}
-      },
-      "id": "b7c8d9e0-1111-4aaa-9bbb-500000000006",
-      "name": "응답 (챕터목록)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        718704,
-        537400
-      ]
-    },
-    {
-      "parameters": {
         "path": "repeat-study-chapter-cards-get",
         "responseMode": "responseNode",
         "options": {}
@@ -1223,6 +1107,79 @@
       "position": [
         718464,
         537700
+      ]
+    },
+    {
+      "parameters": {
+        "path": "repeat-study-chapters-get",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c9d0e1f2-1111-4aaa-9bbb-600000000001",
+      "name": "9. GET 챕터 목록 조회 Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        717696,
+        537400
+      ],
+      "webhookId": "repeat-study-chapters-get"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "value": "appnIQ0eb9IPrQGCt",
+          "mode": "id"
+        },
+        "table": {
+          "value": "카드",
+          "mode": "name"
+        },
+        "filterByFormula": "{활성}=1",
+        "options": {}
+      },
+      "id": "c9d0e1f2-1111-4aaa-9bbb-600000000002",
+      "name": "Airtable: 챕터목록용 카드 조회",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        717952,
+        537400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "J5wefJCMalpjjm3Q",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const chaptersById = {};\n$input.all().forEach(item => {\n  const ids = item.json.자료 || [];\n  const titles = item.json.자료명 || [];\n  ids.forEach((id, idx) => {\n    if (!id) return;\n    if (!chaptersById[id]) chaptersById[id] = { id, title: titles[idx] || titles[0] || '', card_count: 0 };\n    chaptersById[id].card_count++;\n  });\n});\nconst chapters = Object.values(chaptersById).sort((a, b) => a.title.localeCompare(b.title, 'ko'));\nreturn [{ json: { chapters } }];"
+      },
+      "id": "c9d0e1f2-1111-4aaa-9bbb-600000000003",
+      "name": "챕터 목록 정리",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        718208,
+        537400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "c9d0e1f2-1111-4aaa-9bbb-600000000004",
+      "name": "응답 (챕터목록)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        718464,
+        537400
       ]
     }
   ],
@@ -1562,66 +1519,6 @@
         ]
       ]
     },
-    "9. GET 챕터 목록 조회 Webhook": {
-      "main": [
-        [
-          {
-            "node": "Airtable: 챕터용 학습자료 조회",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Airtable: 챕터용 카드 조회",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Airtable: 챕터용 학습자료 조회": {
-      "main": [
-        [
-          {
-            "node": "Merge (챕터목록)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Airtable: 챕터용 카드 조회": {
-      "main": [
-        [
-          {
-            "node": "Merge (챕터목록)",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Merge (챕터목록)": {
-      "main": [
-        [
-          {
-            "node": "챕터 목록 정리",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "챕터 목록 정리": {
-      "main": [
-        [
-          {
-            "node": "응답 (챕터목록)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "10. GET 챕터별 카드 목록 조회 Webhook": {
       "main": [
         [
@@ -1649,6 +1546,39 @@
         [
           {
             "node": "응답 (챕터카드목록)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9. GET 챕터 목록 조회 Webhook": {
+      "main": [
+        [
+          {
+            "node": "Airtable: 챕터목록용 카드 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: 챕터목록용 카드 조회": {
+      "main": [
+        [
+          {
+            "node": "챕터 목록 정리",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "챕터 목록 정리": {
+      "main": [
+        [
+          {
+            "node": "응답 (챕터목록)",
             "type": "main",
             "index": 0
           }
