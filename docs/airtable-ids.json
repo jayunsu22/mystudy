@@ -1,0 +1,9 @@
+{
+  "workspaceId": "wspM4cjxuM52BmpYX",
+  "baseId": "appnIQ0eb9IPrQGCt",
+  "tables": {
+    "학습자료": "tblVPC4u4i7S74RgR",
+    "카드": "tblTFZY8S233jNbPO",
+    "복습기록": "tblOgR0EKmxAypFLB"
+  }
+}
