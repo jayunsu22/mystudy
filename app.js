@@ -323,13 +323,16 @@ async function runCardDrill(card) {
   if (nextRequested) { return true; }
 
   const steps = [
-    { text: card.model_answer, lang: 'en-US' },
-    { text: card.model_answer, lang: 'en-US' },
-    { text: card.model_answer, lang: 'en-US' },
-    { text: card.question, lang: 'ko-KR' },
-    { text: card.question, lang: 'ko-KR' }
+    { text: card.model_answer, lang: 'en-US', label: '영어 따라말하기 1/3' },
+    { text: card.model_answer, lang: 'en-US', label: '영어 따라말하기 2/3' },
+    { text: card.model_answer, lang: 'en-US', label: '영어 따라말하기 3/3' },
+    { text: card.question, lang: 'ko-KR', label: '한국어 회상 1/2' },
+    { text: card.question, lang: 'ko-KR', label: '한국어 회상 2/2' }
   ];
+  const stepIndicatorEl = document.getElementById('drillStepIndicator');
   for (const step of steps) {
+    if (stepIndicatorEl) stepIndicatorEl.textContent = step.label;
+    dlog(`드릴 ${step.label}: ${step.text}`); // 스텝이 실제로 다 도는지 디버그 패널에서 확인 가능
     renderStatus('speaking');
     await speak(step.text, step.lang);
     if (mode === 'HOME') return true;
@@ -341,6 +344,7 @@ async function runCardDrill(card) {
     if (repeatRequested) { repeatRequested = false; return false; }
     if (nextRequested) { return true; }
   }
+  if (stepIndicatorEl) stepIndicatorEl.textContent = '';
   return true;
 }
 
@@ -482,15 +486,16 @@ function renderChapterStudyView(card, index) {
   }).join('');
   el.card.innerHTML = `
     <select id="chapterCardSelect" class="chapter-select">${options}</select>
-    ${rateButtonsHtml()}
     <div class="phase-tag new">📖 ${currentChapter.title} · ${index + 1}/${chapterCards.length}</div>
     <div id="statusLine" class="status-line"><span class="status-dot"></span><span class="status-text">대기 중</span></div>
+    <div id="drillStepIndicator" class="small-note" style="margin-top:0;"></div>
     <div class="question">${card.question}</div>
     <div class="hint">${card.hint || ''}</div>
     <div class="answer" id="answerText" style="display:none;"></div>
     <div class="heard" id="heardText"></div>
     <div class="feedback" id="feedbackText" style="display:none;"></div>
     <div class="pron-tip" id="pronTip" style="display:none;"></div>
+    ${rateButtonsHtml()}
   `;
   const selectEl = document.getElementById('chapterCardSelect');
   if (selectEl) {
