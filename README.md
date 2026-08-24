@@ -13,6 +13,8 @@
   총 반복횟수/최근 학습일 통계를 보고, Claude가 만든 카드 내용이 이상하면 수정하거나 삭제.
 - `srs-utils.js` — 신규학습 스케줄러(그라데이션 리콜) 로직. `tests/srs-utils.test.js`로 테스트됨(`node --test tests/srs-utils.test.js`).
 - `n8n_workflow.json` — n8n 백엔드 (웹훅 7개, "RepeatStudy - Backend").
+- `LESSONS_LEARNED.md` — 개발하면서 겪은 오류/삽질과 해결법 모음. 비슷한 구조(n8n+Airtable+GitHub Pages+
+  음성 웹앱)로 다음 프로젝트 만들 때 먼저 훑어볼 것.
 - `AIRTABLE_SCHEMA.md` — 이미 만들어진 Airtable 베이스의 테이블/필드 구조.
 - `docs/airtable-ids.json` — 베이스/테이블 ID.
 - `docs/superpowers/specs/2026-08-22-repeat-study-design.md` — 설계 배경과 결정 이유 전체 기록.

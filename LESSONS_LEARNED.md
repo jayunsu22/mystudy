@@ -1,0 +1,165 @@
+# 개발 중 겪은 문제와 해결 기록
+
+이 문서는 "반복학습" 앱(n8n + Airtable + GitHub Pages + Web Speech API 조합)을 만들면서
+실제로 겪었던 오류/삽질과 해결 방법을 정리한 것입니다. **비슷한 구조(음성/모바일 웹 앱 + n8n 백엔드 +
+Airtable)로 다음 앱을 만들 때, 아래 항목을 미리 체크하면 같은 실수를 반복하지 않을 수 있습니다.**
+
+---
+
+## 1. n8n + Airtable 백엔드
+
+### 1.1 Airtable 노드 "list" operation은 더 이상 안 됨
+- 증상: 404 또는 "Cannot read properties of undefined"
+- 원인: n8n Airtable 노드에서 "list" operation이 deprecated됨
+- 해결: **"search"** operation으로 바꾸고, 원래 list에 걸어뒀던 필터는 `filterByFormula`로 옮기기
+
+### 1.2 Gemini(또는 다른 API) 노드 403 Forbidden
+- 원인: URL에 `?key={{ $credentials.xxx }}` 식으로 직접 꽂아 넣었는데 정작 노드에 Credential이 연결 안 돼 있음
+- 해결: HTTP Request 노드의 인증 방식을 **"Predefined Credential Type"**으로 바꾸고 해당 credential을 선택.
+  URL에 키를 직접 넣는 방식은 credential이 로테이션되거나 새로 만들어질 때 계속 깨짐
+
+### 1.3 API 모델명 404 (deprecated model)
+- 증상: 이전엔 되던 API가 갑자기 404
+- 원인: 모델명이 deprecated됨 (예: `gemini-1.5-flash` → `gemini-2.5-flash`)
+- 해결: 에러 메시지에 보통 대체 모델 안내가 있으니 확인하고 URL의 모델명 교체
+
+### 1.4 손으로 만든/붙여넣은 n8n 노드 JSON에서 Airtable update 노드가 "Could not get parameter" 에러
+- 증상: node UI에서 직접 만든 노드는 잘 되는데, JSON을 손으로 써서 import/paste한 노드는
+  `columns.matchingColumns` 관련 에러가 남
+- 원인: Airtable **update** operation은 `columns` 파라미터 안에 `matchingColumns`(어느 필드로 기존 레코드를
+  찾을지, 보통 `["id"]`)와 `schema`(필드 목록) 배열이 있어야 하는데, UI로 설정하면 내부적으로 채워지지만
+  손으로 쓴 JSON은 이걸 빠뜨리기 쉬움
+- 해결: update 노드의 `columns`에 반드시 아래 형태로 넣기:
+  ```json
+  "columns": {
+    "mappingMode": "defineBelow",
+    "matchingColumns": ["id"],
+    "value": { "id": "={{ $json.card_id }}", "필드명": "={{ $json.값 }}" },
+    "schema": [
+      { "id": "id", "displayName": "id", "type": "string", "required": false, "display": true, "canBeUsedToMatch": true, "defaultMatch": true },
+      { "id": "필드명", "displayName": "필드명", "type": "number", "required": false, "display": true, "canBeUsedToMatch": true, "defaultMatch": false }
+    ]
+  }
+  ```
+  (create operation은 matchingColumns는 필요 없지만 schema는 있는 게 안전함 — 없으면 "No columns found" 경고가 뜰 수 있음)
+
+### 1.5 Single Select(옵션) 필드에 고정값을 넣었더니 "expects one of the following values: [] but we got 'X'"
+- 원인: 위 schema 배열에서 그 필드를 `"type": "options"`로 선언했는데, 실제 선택 가능한 옵션 목록(`options: [...]`)을
+  안 채워서 n8n이 "허용된 값이 하나도 없다"고 거부함
+- 해결: 그 필드에 **고정 문자열 값을 그대로 흘려보내기만 할 뿐 검증이 필요 없다면**, schema의 `type`을
+  `"options"` 대신 그냥 `"string"`으로 선언. Airtable Single Select 필드도 문자열 값을 그대로 넣으면
+  기존 옵션과 이름이 일치하는 한 정상 저장됨
+
+### 1.6 Merge 노드로 두 브랜치를 합쳐서 Code에서 `$('노드이름').all()`로 교차 참조하는 패턴은 신뢰할 수 없었음
+- 증상: 챕터별 카드 개수를 집계하는 로직에서 Merge 노드(학습자료 브랜치 + 카드 브랜치)를 쓰고
+  Code 노드에서 `$('Airtable: 카드 조회').all()`처럼 이름으로 다른 브랜치 데이터를 가져왔더니,
+  실제 실행에서는 항상 0개로 계산됨 (기존에 있던 "자료별 통계" 웹훅도 같은 버그를 갖고 있었음 —
+  원래부터 있던 문제였음)
+- 해결: **Merge + 이름으로 교차 참조하는 패턴을 피하고, 가능하면 단일 브랜치로 데이터 하나만 가져와서
+  Code 노드 안에서 직접 그룹핑/집계**하는 방식으로 바꾸니 바로 정상 동작. (예: 카드 테이블 하나만
+  조회해서, 카드마다 붙어있는 자료 링크/자료명 필드를 기준으로 Code에서 챕터별로 묶기)
+- 교훈: n8n에서 Merge+교차참조 패턴을 쓸 계획이면, **실제 웹훅을 curl로 호출해서 숫자가 맞는지
+  반드시 검증**할 것. UI에서 "Execute step" 성공만으로는 이런 버그를 못 잡음
+
+### 1.7 n8n 노드 import/paste가 자꾸 꼬일 때
+- 증상: 부분 노드 JSON을 붙여넣거나 import하면 캐시 문제/중복 노드/미묘한 파라미터 누락이 반복됨
+- 가장 확실했던 방법: **전체 workflow JSON 파일을 만들어서, n8n 캔버스에서 기존 노드를 전부
+  선택+삭제(Ctrl+A → Delete)한 뒤 "Import from File"로 통째로 다시 불러오기**. 이러면 credential은
+  JSON 안의 credential id로 자동 재연결되고, 노드 간 참조/포지션 문제도 한 번에 해결됨.
+  부분 스니펫을 붙여넣는 방식보다 훨씬 안정적이었음
+
+### 1.8 Airtable 레코드를 MCP 도구로 직접 만들 때
+- `create_records_for_table`/`update_records_for_table`의 `fields` 객체 key는 **필드 이름이 아니라 필드 ID**를
+  써야 함 (스키마 조회로 얻는 `fld...` 값)
+- 한글 텍스트를 `\uXXXX` 유니코드 이스케이프로 손으로 입력하면 오타가 잘 남 (받침이 깨지거나 글자가
+  바뀌는 식). 가능하면 원문 그대로(UTF-8 리터럴) 넣고, 대량 생성 후에는 꼭 몇 개 샘플을 다시 읽어와서
+  눈으로 확인할 것
+
+---
+
+## 2. Web Speech API (TTS/STT) 관련
+
+### 2.1 `speechSynthesis.cancel()` + `speak()`를 빠르게 반복 호출하면 엔진이 멈춰버림
+- 증상: 버튼을 연타하면 문장을 읽다가 그대로 멈추고 다음 진행이 안 됨
+- 원인: 일부 모바일 브라우저의 TTS 엔진이 `cancel()` 직후 바로 `speak()`가 겹치면 `onend`/`onerror`를
+  아예 안 쏘는 경우가 있음
+- 해결: **워치독 타임아웃**을 걸어서, 글자 수 기반 예상 재생 시간을 넘기면 강제로 다음 단계로 진행시키기
+  (onend를 못 받아도 앱 전체가 멈추지 않게)
+
+### 2.2 버튼 연타로 상태 플래그가 꼬임
+- 해결:
+  1. 트리거 함수(예: "다음" 버튼)에 **디바운스**: 이미 같은 요청이 처리 중이면 무시
+  2. 새 항목(카드/문장)으로 넘어갈 때 **관련 플래그를 무조건 리셋**(직전 상태가 남아있다고 가정하지 않기)
+  3. "종료" 버튼은 단순히 안내 멘트만 하지 말고, 진행 중인 재생/듣기를 **즉시 interrupt**시키고,
+     루프 중간중간(각 await 뒤)에 "지금 종료된 상태인가?"를 체크해서 루프가 몰래 계속 도는 일이 없게 하기
+
+### 2.3 같은 재생 속도(rate) 값이어도 기기마다 실제 체감 속도가 다름
+- 폰마다 내장 TTS 엔진이 달라서, 똑같은 `rate=0.7`이어도 어떤 폰은 적당하고 어떤 폰은 너무 느리게/
+  늘어지게 들림
+- 해결: 배속을 유저가 직접 고를 수 있게 하고(버튼 여러 개), 그 값을 `localStorage`에 저장. localStorage는
+  기기/브라우저별로 독립적이라 폰마다 다르게 맞출 수 있음. 배속 범위도 넉넉하게 주는 게 좋음(예: 0.7~1.6배)
+- 여러 언어를 섞어 재생하는 앱이면, 배속 컨트롤이 **어떤 언어에 적용되는지 명확히** 하고
+  (예: "영어만 적용, 한국어 안내는 항상 기본속도") UI에 문구로 명시할 것 — 안 그러면 사용자가
+  "왜 하나도 안 빨라지지" 하고 헷갈림
+
+---
+
+## 3. 모바일 UX
+
+### 3.1 화면에 붙어있는 컨트롤(배속 버튼 등)을 큰 드롭다운/리스트 바로 옆에 두지 말 것
+- 네이티브 `<select>` 드롭다운(특히 항목이 많아서 풀스크린 리스트로 뜨는 경우) 근처를 조작하다가
+  손가락이 스쳐서 바로 아래/옆에 있는 다른 버튼을 잘못 누르는 일이 실제로 있었음
+- 해결: 자주 실수로 눌릴만한 조작 버튼은 드롭다운/긴 리스트와 **거리를 두고 배치**
+
+### 3.2 카드/콘텐츠가 길어지면 하단 컨트롤(일시정지, 종료 등)이 화면 밖으로 밀려남
+- 해결: 하단 컨트롤 바에 `position: sticky; bottom: 0;` 적용해서 스크롤 위치와 상관없이 항상 화면에 보이게 하기
+
+### 3.3 화면 자동 꺼짐(절전)
+- 운전 중 등 손으로 화면을 안 만지는 상태로 오래 쓰는 앱은, 일정 시간 조작이 없으면 폰이 화면을 꺼버리고
+  그 순간 타이머/음성 진행도 같이 멈춤
+- 해결: **Wake Lock API** (`navigator.wakeLock.request('screen')`) 사용
+  - 세션 시작(사용자 클릭 등 user gesture 안에서) 요청, 세션 종료 시 해제
+  - 브라우저가 화면이 꺼졌다 켜지거나 탭 전환 시 lock을 자동으로 풀어버릴 수 있으므로,
+    `visibilitychange` 이벤트에서 "아직 세션 중이면" 재요청하는 로직을 꼭 넣기
+  - HTTPS 필수(GitHub Pages는 기본 HTTPS라 문제없음)
+
+### 3.4 브라우저 종류에 따라 동작이 다름
+- `SpeechRecognition`(음성 인식)은 Chrome 계열만 확실히 지원. 삼성인터넷/네이버·카카오 인앱 브라우저 등은
+  아예 안 되거나 동작이 다를 수 있음
+- 해결: 지원 안 되면 명시적으로 알려주고(`alert`), README/안내 문구에 "Chrome으로 열어주세요" 명시
+
+---
+
+## 4. 배포/캐싱
+
+### 4.1 GitHub Pages는 정적 파일을 브라우저/CDN이 캐싱함
+- CSS/JS를 고쳐도 사용자 폰에 옛날 버전이 계속 보이는 경우가 있음
+- 해결: `<script src="app.js?v=20260824f">`처럼 **파일을 고칠 때마다 쿼리스트링 버전을 수동으로 올리기**.
+  날짜+알파벳 조합(`YYYYMMDDa`, `YYYYMMDDb`, ...)이면 여러 번 고쳐도 순서가 헷갈리지 않음
+
+---
+
+## 5. 콘텐츠(외부 자료) 다루기
+
+### 5.1 유튜브 영상은 "본다"고 해서 자막/스크립트를 못 가져올 수도 있음
+- 자막 트랙이 없는 영상은 화면에 자막이 보여도 텍스트로 긁을 방법이 없음(그림처럼 박혀있는 자막이라
+  프레임 단위로 다 돌려봐야 함 — 긴 영상이면 현실적으로 불가능)
+- 해결: 그런 경우 영상 **설명란/댓글의 타임스탬프 목록**처럼 이미 텍스트로 존재하는 메타데이터를
+  활용하고, 실제 예문/본문 내용은 그 틀(패턴/주제)에 맞춰 **직접 새로 작성**. 원본 영상 내용을
+  그대로 베꼈다고 착각하지 않도록 사용자에게 명확히 알릴 것
+
+---
+
+## 체크리스트 (다음 프로젝트 시작할 때 훑어보기)
+
+- [ ] n8n Airtable 노드: list 대신 search, update 노드엔 matchingColumns+schema 꼭 채우기
+- [ ] Airtable Single Select 필드에 고정값만 보낼 거면 schema type은 string으로
+- [ ] n8n 집계 로직은 Merge+교차참조보다 단일 브랜치+Code 그룹핑 우선 고려, 만들면 curl로 실제 숫자 검증
+- [ ] n8n 노드가 꼬이면 전체 JSON 재import가 가장 빠름
+- [ ] TTS: cancel()+speak() 워치독 타임아웃, 배속은 유저가 폰별로 조절 가능하게(localStorage)
+- [ ] 버튼 연타 디바운스 + 새 항목 진입 시 상태 플래그 리셋 + 종료 버튼이 진행 중 루프를 확실히 끊는지 확인
+- [ ] 하단 컨트롤 sticky, 드롭다운 근처에 실수로 누르기 쉬운 버튼 배치 금지
+- [ ] 손 안 대고 오래 쓰는 화면이면 Wake Lock 적용
+- [ ] Chrome 외 브라우저 지원 여부 체크 및 안내
+- [ ] 정적 파일 캐시버스팅 버전 올리는 습관
+- [ ] 외부 영상/자료 인용 시 자막 유무 먼저 확인, 없으면 메타데이터만 활용해서 직접 재작성
