@@ -68,6 +68,29 @@ function renderDebugPanel() {
   panelEl.textContent = log.length ? log.join('\n') : '(아직 기록 없음)';
 }
 
+/* ============ 화면 꺼짐 방지 (Wake Lock) ============
+   운전 중엔 손으로 화면을 터치할 일이 없어서, 일정 시간 조작이 없으면 폰이 알아서 화면을 끄고
+   그러면 음성 진행도 같이 멈춰버린다. 챕터에 들어가 있는 동안은 화면이 안 꺼지게 붙잡아둔다. */
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (e) {
+    dlog(`화면 꺼짐 방지 실패: ${e}`);
+  }
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+// 화면이 꺼졌다 켜지거나 탭을 벗어났다 돌아오면 브라우저가 wake lock을 자동으로 풀어버리므로,
+// 여전히 챕터 안(HOME이 아님)이면 다시 화면을 보게 됐을 때 즉시 재요청한다.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && mode !== 'HOME' && !wakeLock) {
+    requestWakeLock();
+  }
+});
+
 /* ============ 상태 ============ */
 let mode = 'HOME'; // HOME | CHAPTER | CHAPTER_REVIEW | NEW(미사용) | REVIEW(미사용)
 let recognizing = false;
@@ -75,6 +98,7 @@ let currentChapter = null; // { id, title } — 지금 들어가 있는 챕터
 let chapterCards = [];
 let chapterIndex = 0;
 let chapterJumpIndex = null; // 드롭다운으로 다른 문장을 골랐을 때 다음에 진행할 인덱스
+let wakeLock = null; // 화면 꺼짐 방지(Wake Lock) 핸들 — 챕터 학습/복습 중엔 잡고, 홈으로 나가면 놓음
 const RATE_OPTIONS = [0.7, 0.85, 1.0, 1.15, 1.3, 1.6]; // 영어는 ENGLISH_RATE_MULTIPLIER가 곱해져서 늘 이보다 느림 —
 // 기기 TTS 엔진에 따라 최대 배속(1.15x)에서도 영어가 늘어지는 경우가 있어 더 빠른 옵션을 추가해둠
 const ENGLISH_RATE_MULTIPLIER = 0.595; // 영어 문장(정답)은 발음이 또박또박 들리도록 한국어 안내보다 항상 느리게(기존 0.7배에서 15% 더 느리게) 재생
@@ -425,6 +449,7 @@ function setPauseBtnLabel(icon, label) {
 
 function goHome() {
   mode = 'HOME';
+  releaseWakeLock();
   clearTimeout(waitTimer);
   isPaused = false;
   pendingResumeListen = false;
@@ -452,6 +477,7 @@ function goHome() {
 async function enterChapter(chapter) {
   currentChapter = chapter;
   mode = 'CHAPTER';
+  requestWakeLock(); // 챕터 탭(클릭)이 user gesture라 여기서 요청해야 브라우저가 허용해줌
   el.home.style.display = 'none';
   el.footer.style.display = 'none';
   el.card.innerHTML = `<div class="stat-chip">불러오는 중...</div>`;
