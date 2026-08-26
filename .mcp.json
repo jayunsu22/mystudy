@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "npx",
+      "args": ["n8n-mcp"],
+      "env": {
+        "N8N_API_URL": "https://primary-production-a6fa.up.railway.app",
+        "N8N_API_KEY": "${N8N_API_KEY}"
+      }
+    }
+  }
+}
