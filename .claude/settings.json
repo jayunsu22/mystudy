@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\n8n_반복학습\\반복학습앱\\.claude\\hooks\\bump-cache-version.ps1\"",
+            "shell": "powershell",
+            "timeout": 15,
+            "statusMessage": "캐시버스팅 버전 확인 중..."
+          }
+        ]
+      }
+    ]
+  }
+}
