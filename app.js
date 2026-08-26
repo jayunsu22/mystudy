@@ -433,8 +433,11 @@ async function loadChapterList() {
     }
     el.chapterListWrap.innerHTML = chapters.map((ch) => `
       <button class="chapter-item" data-chapter-id="${ch.id}" data-chapter-title="${(ch.title || '').replace(/"/g, '&quot;')}">
-        <span class="chapter-title">${ch.title}</span>
-        <span class="chapter-count">${ch.card_count}개 문장 ›</span>
+        <span class="chapter-info">
+          <span class="chapter-title">${ch.title}</span>
+          <span class="chapter-count">${ch.card_count}개 문장</span>
+        </span>
+        <svg class="chapter-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
       </button>
     `).join('');
   } catch (e) {

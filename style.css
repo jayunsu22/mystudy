@@ -15,8 +15,9 @@ html,body{
 .top p{ color:var(--muted); font-size:14px; margin:0; }
 .top-actions{ display:flex; gap:6px; margin-bottom:4px; }
 .top-actions button{
-  background:#1c2740; color:var(--text); border:1px solid #2a3a5c; border-radius:10px;
-  padding:6px 10px; font-size:16px; line-height:1; cursor:pointer;
+  background:#1c2740; color:var(--text); border:1px solid #2a3a5c; border-radius:12px;
+  width:44px; height:44px; font-size:18px; line-height:1; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
 }
 .card{
   background:var(--card); border-radius:20px; padding:24px; flex:1;
@@ -76,13 +77,15 @@ html,body{
 .footer-controls button.paused{ background:#332a1a; border-color:#5c4a2a; color:var(--warn); }
 .chapter-list{ display:flex; flex-direction:column; gap:10px; width:100%; }
 .chapter-item{
-  background:#1c2740; border:1px solid #2a3a5c; border-radius:14px; padding:16px 18px;
-  display:flex; justify-content:space-between; align-items:center; width:100%;
+  background:#1c2740; border:1px solid #2a3a5c; border-left:4px solid var(--accent2); border-radius:14px; padding:16px 18px;
+  display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%;
   color:var(--text); font-family:inherit; cursor:pointer; text-align:left;
 }
 .chapter-item:active{ transform:scale(0.98); }
+.chapter-item .chapter-info{ display:flex; flex-direction:column; gap:4px; min-width:0; }
 .chapter-item .chapter-title{ font-size:17px; font-weight:700; }
-.chapter-item .chapter-count{ font-size:13px; color:var(--muted); white-space:nowrap; margin-left:12px; }
+.chapter-item .chapter-count{ font-size:13px; color:var(--muted); white-space:nowrap; }
+.chapter-item .chapter-chevron{ flex-shrink:0; color:var(--muted); }
 .chapter-select{
   width:100%; background:#1c2740; color:var(--text); border:1px solid #2a3a5c; border-radius:12px;
   padding:10px 12px; font-size:14px; font-family:inherit;
